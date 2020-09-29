@@ -15,9 +15,9 @@ Including another URLconf
 """
 from django.urls import include, path
 from rest_framework import routers
-from rest_framework.authtoken import views as token_view
 from api import views
 from django.conf.urls import url
+from api.view_auth_token import AuthTokenView
 
 router = routers.DefaultRouter()
 router.register(r'user', views.UserViewSet, 'user')
@@ -36,7 +36,7 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     # path('api-token-auth/', token_view.obtain_auth_token, name='api-token-auth')
     # url(r'api-token-auth/', views.Authenticate.as_view())
-    url(r'^api-token-auth/', token_view.obtain_auth_token),
+    url(r'^api-token-auth/', AuthTokenView.as_view()),
     path('verify-email/', views.VerifyEmail.as_view(), name='verify-email'),
     # url(r'register/', views.RegisterView.as_view(), name='register'),
 ]
