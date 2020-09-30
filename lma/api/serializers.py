@@ -159,8 +159,8 @@ class TaskSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class CompanySerializer(serializers.HyperlinkedModelSerializer):
-    # address = AddressSerializer(read_only=True)
-    # users = UserSerializer(many=True)
+    address = AddressSerializer()
+    users = UserSerializer(many=True)
     # animals = AnimalSerializer(many=True)
     # inventory = InventorySerializer(many=True)
     # sales = SaleSerializer(many=True)

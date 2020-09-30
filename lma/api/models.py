@@ -36,7 +36,8 @@ class User(AbstractBaseUser):
     role = models.CharField(max_length=15)
     email = models.EmailField(default="inactive@user.com", unique=True)
     # password = models.CharField(max_length=150)
-    address = models.OneToOneField(Address, on_delete=models.CASCADE)
+    address = models.OneToOneField(
+        Address, on_delete=models.CASCADE, null=True)
     is_active = models.BooleanField(default=False)
     # Relationships
     company = models.ForeignKey(

@@ -92,14 +92,33 @@ class UserViewSet(viewsets.ModelViewSet):
         email_body = 'Hello,' \
             " You've been invited to use Livestock Manager. Please click the link to login using your email as your email and password. Password can be changed after in your profile \n" + absurl
         emails = request.data['emails']
-        print('USERS', emails)
+        company = Company.objects.get(
+            id="30b67365-8e19-460a-a7df-d1abd4afd9b9")
+
+        users = []
         for email in emails:
-            user = User(email=email)
+            user = User(email=email, role='USER',
+                        company=company)
             user.set_password(email)
             user.save()
+            serializer = UserSerializer(instance=user, context={
+                'request': request})
+            users.append(serializer.data)
             email_data = {'email_body': email_body, 'to_email': email,
                           'email_subject': "You've been invited to Livestock Manager"}
             Util.send_email(email_data)
+
+        return Response(users)
+
+    def list(self, request):
+        company = Company.objects.get(
+            id="30b67365-8e19-460a-a7df-d1abd4afd9b9")
+        serializer = CompanySerializer(instance=company, context={
+            'request': request})
+        print('COMPANY', serializer.data)
+        # users = company['users']
+        # serialzer = UserSerializer(users, many=True)
+        return Response(serializer.data['users'])
 
 
 class CompanyViewSet(viewsets.ModelViewSet):
