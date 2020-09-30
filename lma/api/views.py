@@ -61,7 +61,7 @@ class UserViewSet(viewsets.ModelViewSet):
             last_name=last_name,
             email=email,
             role=role,
-            is_active=is_active,
+            is_active=True,
             address=user_address,
             company=company
         )
@@ -98,7 +98,7 @@ class UserViewSet(viewsets.ModelViewSet):
         users = []
         for email in emails:
             user = User(email=email, role='USER',
-                        company=company)
+                        company=company, is_active=True)
             user.set_password(email)
             user.save()
             serializer = UserSerializer(instance=user, context={

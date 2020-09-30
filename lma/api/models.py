@@ -41,7 +41,7 @@ class User(AbstractBaseUser):
     is_active = models.BooleanField(default=False)
     # Relationships
     company = models.ForeignKey(
-        Company, related_name='users', default='', on_delete=models.CASCADE)
+        Company, related_name='users', default='', on_delete=models.CASCADE, null=True)
     # Joined
     # tasks = [Task]
     USERNAME_FIELD = 'email'

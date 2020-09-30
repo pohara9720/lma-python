@@ -3,6 +3,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from .serializer_auth_token import AuthTokenSerializer
 
+
 class AuthTokenView(ObtainAuthToken):
     serializer_class = AuthTokenSerializer
 
