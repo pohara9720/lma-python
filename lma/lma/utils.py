@@ -9,6 +9,7 @@ import io
 from django.http import HttpResponse
 # from reportlab.pdfgen import canvas
 from reportlab.platypus import Table
+from rest_framework.authtoken.models import Token
 from reportlab.platypus import SimpleDocTemplate
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib import colors
@@ -28,7 +29,8 @@ from api.models import (
 from api.serializers import (
     AnimalSerializer,
     InventorySerializer,
-    SaleSerializer
+    SaleSerializer,
+    UserSerializer
 )
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -103,6 +105,20 @@ class EmailThread(threading.Thread):
 
 class Util:
     @staticmethod
+    def authenticate(request):
+        token = request.META['HTTP_AUTHORIZATION'].split()[1]
+        user_email = Token.objects.get(key=token).user
+        if user_email:
+            user = User.objects.get(email=user_email)
+            serializer = UserSerializer(instance=user, context={
+                'request': request})
+
+            return serializer.data
+        else:
+            print('NO USER')
+            pass
+
+    @staticmethod
     def send_email(data):
         email = EmailMessage(
             subject=data['email_subject'], body=data['email_body'], to=[data['to_email']])
@@ -112,9 +128,9 @@ class Util:
     def upload_file(image_file):
         s3 = boto3.client('s3')
         bucket = settings.AWS_STORAGE_BUCKET_NAME
-        key_id = uuid.uuid4
+        key_id = uuid.uuid4()
         file_type = image_file.name.split('.')[1]
-        key = Template("$key_id.$type").substitute(key=key_id, type=file_type)
+        key = Template("$key.$type").substitute(key=key_id, type=file_type)
         s3.put_object(
             Bucket=bucket, Body=image_file, Key=key
         )

@@ -24,24 +24,6 @@ class AddressSerializer(serializers.HyperlinkedModelSerializer):
         ]
 
 
-class UserSerializer(serializers.HyperlinkedModelSerializer):
-    address = AddressSerializer()
-
-    class Meta:
-        model = User
-        fields = [
-            'id',
-            'first_name',
-            'last_name',
-            'email',
-            'role',
-            'password',
-            'address',
-            'is_active',
-            'company',
-        ]
-
-
 class ExpenseSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
@@ -158,9 +140,28 @@ class TaskSerializer(serializers.HyperlinkedModelSerializer):
         ]
 
 
+# TODO DONT DO THIS!!!
+class TodoRemoveSerializer(serializers.HyperlinkedModelSerializer):
+    address = AddressSerializer()
+
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'email',
+            'role',
+            'password',
+            'address',
+            'is_active',
+            'company',
+        ]
+
+
 class CompanySerializer(serializers.HyperlinkedModelSerializer):
     address = AddressSerializer()
-    users = UserSerializer(many=True)
+    users = TodoRemoveSerializer(many=True)
     # animals = AnimalSerializer(many=True)
     # inventory = InventorySerializer(many=True)
     # sales = SaleSerializer(many=True)
@@ -181,4 +182,23 @@ class CompanySerializer(serializers.HyperlinkedModelSerializer):
             'inventory',
             'sales',
             'tasks'
+        ]
+
+
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    address = AddressSerializer()
+    company = CompanySerializer()
+
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'email',
+            'role',
+            'password',
+            'address',
+            'is_active',
+            'company',
         ]
