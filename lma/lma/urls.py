@@ -27,6 +27,8 @@ router.register(r'animal', views.AnimalViewSet, 'animal')
 router.register(r'inventory', views.InventoryViewSet, 'inventory')
 router.register(r'item', views.InvoiceItemViewSet, 'item')
 router.register(r'sale', views.SaleViewSet, 'sale')
+router.register(r'task', views.TaskViewset, 'task')
+router.register(r'breedingset', views.BreedingSetViewSet, 'breedingset')
 # router.register(r'register', views.RegisterView.as_view(), basename='register')
 
 # Wire up our API using automatic URL routing.

@@ -13,7 +13,8 @@ from rest_framework.authtoken.models import Token
 from reportlab.platypus import SimpleDocTemplate
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib import colors
-
+from datetime import date, timedelta
+import calendar
 
 from api.models import (
     User,
@@ -42,6 +43,7 @@ class Stripe:
     @staticmethod
     def create_stripe_account(request):
         price_id = request.data['subscription']
+        email = request.data['email']
         price = dict()
         price['FREE'] = settings.STRIPE_PRICE_FREE_TIER
         price['BASIC_MONTHLY'] = settings.STRIPE_PRICE_BASIC_TIER_MONTHLY
@@ -54,14 +56,6 @@ class Stripe:
         card_number = request.data['payment_card']
         card_exp = request.data['payment_expiration']
         card_cvc = request.data['payment_cvc']
-        address = {
-            "city": request.data['payment_city'],
-            "state": request.data['payment_state'],
-            "postal_code": request.data['payment_zip'],
-            "line1": request.data['payment_street'],
-            "country": "US"
-        },
-
         payment_method = stripe.PaymentMethod.create(
             type="card",
             card={
@@ -71,25 +65,108 @@ class Stripe:
                 "cvc": card_cvc,
             },
             billing_details={
-                "address": address,
+                "address": {
+                    "city": request.data['payment_city'],
+                    "state": request.data['payment_state'],
+                    "postal_code": request.data['payment_zipcode'],
+                    "line1": request.data['payment_street'],
+                    "country": "US"
+                },
                 "name": card_name
             }
         )
+
         customer = stripe.Customer.create(
             name=card_name,
-            payment_method=payment_method['id'],
-            address=address
+            email=email,
+            address={
+                "city": request.data['payment_city'],
+                "state": request.data['payment_state'],
+                "postal_code": request.data['payment_zipcode'],
+                "line1": request.data['payment_street'],
+                "country": "US"
+            }
         )
+
+        attached = stripe.PaymentMethod.attach(
+            payment_method['id'], customer=customer['id'])
+
+        stripe.Customer.modify(
+            customer['id'],
+            invoice_settings={
+                "default_payment_method": attached['id']
+            },
+        )
+
         subscription = stripe.Subscription.create(
             customer=customer['id'],
             items=[
                 {"price": price[price_id]},
             ],
         )
+
         account = dict()
-        account['subscription'] = subscription
-        account['customer'] = customer
+        account['subscription'] = subscription['id']
+        account['customer'] = customer['id']
         return account
+
+    @staticmethod
+    def retrieve_account(pk):
+        customer = stripe.Customer.retrieve(pk)
+        payment_id = customer['invoice_settings']['default_payment_method']
+        payment_details = stripe.PaymentMethod.retrieve(payment_id)
+
+        response = {
+            "id": customer['id'],
+            "name": customer['name'],
+            "address": {
+                "street": customer['address']['line1'],
+                "city": customer['address']['city'],
+                "state": customer['address']['state'],
+                "zipcode": customer['address']['postal_code'],
+            },
+            "last4": payment_details['card']['last4'],
+            "exp_month": payment_details['card']['exp_month'],
+            "exp_year": payment_details['card']['exp_year'],
+        }
+        return response
+
+    @staticmethod
+    def update_account(request, pk):
+        data = request.data
+        name = data['name']
+        number = data['number']
+        expiration = data['expiration']
+        cvc = data['cvc']
+        street = data['street']
+        city = data['city']
+        state = data['state']
+        zipcode = data['zipcode']
+
+        customer = stripe.Customer.modify(
+            pk,
+            name=name,
+            address={
+                "city": city,
+                "line1": street,
+                "postal_code": zipcode,
+                "state": state
+            }
+        )
+
+        payment_id = customer['invoice_settings']['default_payment_method']
+
+        stripe.PaymentMethod.modify(
+            payment_id,
+            card={
+                "number": number,
+                "exp_month": expiration.split('-')[1],
+                "exp_year": expiration.split('-')[0],
+                "cvc": cvc,
+            }
+        )
+        result = Stripe.retrieve_account(pk)
+        return result
 
 
 class EmailThread(threading.Thread):
@@ -154,7 +231,7 @@ class Util:
         subscription = stripe_info['subscription']
         company_logo = Util.upload_file(request.data['company_logo'])
         company_address = Util.save_address(
-            request, 'company_street', 'company_state', 'company_city', 'company_zip'
+            request, 'company_street', 'company_state', 'company_city', 'company_zipcode'
         )
 
         company = Company.objects.create(

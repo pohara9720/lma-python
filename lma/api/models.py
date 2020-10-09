@@ -66,7 +66,7 @@ class Animal(models.Model):
     breed = models.CharField(max_length=50)
     father = models.CharField(max_length=50)
     mother = models.CharField(max_length=50)
-    attachment = models.CharField(max_length=150)
+    attachment = models.CharField(max_length=150, null=True)
     # Relationships
     company = models.ForeignKey(
         Company, related_name='animals', default='', on_delete=models.CASCADE
@@ -80,9 +80,10 @@ class Inventory(models.Model):
     tank_number = models.IntegerField()
     canister_number = models.IntegerField()
     top_id = models.IntegerField()
-    father = models.CharField(max_length=50)
-    mother = models.CharField(max_length=50)
+    father = models.CharField(max_length=50, null=True)
+    mother = models.CharField(max_length=50, null=True)
     units = models.IntegerField()
+    animal_category = models.CharField(max_length=50, default='')
     # Relationships
     company = models.ForeignKey(
         Company, related_name='inventory', default='', on_delete=models.CASCADE
@@ -98,22 +99,33 @@ class Expense(models.Model):
     )
 
 
+class BreedingSet(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    female = models.ForeignKey(
+        Animal, related_name='mother_to', default='', on_delete=models.CASCADE
+    )
+    animal_semen = models.ForeignKey(
+        Animal, related_name='father_to', default='', on_delete=models.CASCADE, null=True
+    )
+    inventory_semen = models.ForeignKey(
+        Inventory, related_name='bred_with', default='', on_delete=models.CASCADE, null=True
+    )
+
+
 class Task(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=150)
     category = models.CharField(max_length=50)
-    assigned_date = models.DateField()
-    due_date = models.DateField()
+    task_due_date = models.DateField()
+    due_date = models.DateField(null=True)
     description = models.TextField(max_length=500)
     completed = models.BooleanField()
     # Relationships
     users = models.ManyToManyField(User)
     animals = models.ManyToManyField(Animal)
     cost = models.IntegerField(default=0)
-    expenses = models.ManyToManyField(Expense)
-    inventory = models.ForeignKey(
-        Inventory, related_name='tasks', default='', on_delete=models.CASCADE
-    )
+    # expenses = models.ManyToManyField(Expense)
+    breeding_sets = models.ManyToManyField(BreedingSet)
     company = models.ForeignKey(
         Company, related_name='tasks', default='', on_delete=models.CASCADE)
 
@@ -139,7 +151,6 @@ class Sale(models.Model):
 class InvoiceItem(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     type = models.CharField(max_length=50)
-    item = models.CharField(max_length=150)
     cost = models.IntegerField()
     quantity = models.IntegerField()
     total_price = models.IntegerField()
@@ -147,6 +158,9 @@ class InvoiceItem(models.Model):
     # Relationships
     inventory = models.ForeignKey(
         Inventory, related_name='invoice_items', default='', on_delete=models.CASCADE
+    )
+    models.ForeignKey(
+        Animal, related_name='invoice_items', default='', on_delete=models.CASCADE
     )
     sale = models.ForeignKey(Sale, related_name='items', default='',
                              on_delete=models.CASCADE)

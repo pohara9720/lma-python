@@ -8,7 +8,8 @@ from .models import (
     Task,
     InvoiceItem,
     Sale,
-    Expense
+    Expense,
+    BreedingSet
 )
 
 
@@ -21,6 +22,46 @@ class AddressSerializer(serializers.HyperlinkedModelSerializer):
             'city',
             'state',
             'zipcode'
+        ]
+
+# TODO DONT DO THIS!!!
+
+
+class TodoRemoveSerializer(serializers.HyperlinkedModelSerializer):
+    address = AddressSerializer()
+
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'email',
+            'role',
+            'password',
+            'address',
+            'is_active',
+            'company',
+        ]
+
+# TODO DONT DO THIS!!!
+
+
+class TodoRemoveSerializer2(serializers.HyperlinkedModelSerializer):
+    address = AddressSerializer()
+
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'email',
+            'role',
+            'password',
+            'address',
+            'is_active',
+            'company',
         ]
 
 
@@ -36,7 +77,7 @@ class ExpenseSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class AnimalSerializer(serializers.HyperlinkedModelSerializer):
-    # expenses = ExpenseSerializer(many=True)
+    expenses = ExpenseSerializer(many=True)
 
     class Meta:
         model = Animal
@@ -54,7 +95,9 @@ class AnimalSerializer(serializers.HyperlinkedModelSerializer):
             'mother',
             'attachment',
             'company',
-            'expenses'
+            'expenses',
+            'mother_to',
+            'father_to'
         ]
 
 
@@ -72,26 +115,43 @@ class InventorySerializer(serializers.HyperlinkedModelSerializer):
             'mother',
             'units',
             'company',
-            'tasks',
-            'invoice_items'
+            'invoice_items',
+            'animal_category',
+            'bred_with'
         ]
 
 
 class InvoiceItemSerializer(serializers.HyperlinkedModelSerializer):
-    # inventory = InventorySerializer()
+    inventory = InventorySerializer()
+    animal = AnimalSerializer()
 
     class Meta:
         model = InvoiceItem
         fields = [
             'id',
             'type',
-            'item',
             'quantity',
             'total_price',
             'description',
             'sale',
             'cost',
-            'inventory'
+            'inventory',
+            'animal'
+        ]
+
+
+class BreedingSetSerializer(serializers.HyperlinkedModelSerializer):
+    female = AnimalSerializer()
+    animal_semen = AnimalSerializer()
+    inventory_semen = InventorySerializer()
+
+    class Meta:
+        model = BreedingSet
+        fields = [
+            'id',
+            'female',
+            'animal_semen',
+            'inventory_semen'
         ]
 
 
@@ -117,10 +177,9 @@ class SaleSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class TaskSerializer(serializers.HyperlinkedModelSerializer):
-    # users = UserSerializer(many=True)
-    # animals = AnimalSerializer(many=True)
-    # expenses = ExpenseSerializer(many=True)
-    # inventory = InventorySerializer()
+    users = TodoRemoveSerializer2(many=True)
+    animals = AnimalSerializer(many=True)
+    breeding_sets = BreedingSetSerializer(many=True)
 
     class Meta:
         model = Task
@@ -128,44 +187,25 @@ class TaskSerializer(serializers.HyperlinkedModelSerializer):
             'id',
             'title',
             'category',
-            'assigned_date',
+            'task_due_date',
             'due_date',
             'description',
             'completed',
             'users',
             'animals',
-            'expenses',
-            'inventory',
+            # 'expenses',
+            'breeding_sets',
             'company'
-        ]
-
-
-# TODO DONT DO THIS!!!
-class TodoRemoveSerializer(serializers.HyperlinkedModelSerializer):
-    address = AddressSerializer()
-
-    class Meta:
-        model = User
-        fields = [
-            'id',
-            'first_name',
-            'last_name',
-            'email',
-            'role',
-            'password',
-            'address',
-            'is_active',
-            'company',
         ]
 
 
 class CompanySerializer(serializers.HyperlinkedModelSerializer):
     address = AddressSerializer()
     users = TodoRemoveSerializer(many=True)
-    # animals = AnimalSerializer(many=True)
-    # inventory = InventorySerializer(many=True)
+    animals = AnimalSerializer(many=True)
+    inventory = InventorySerializer(many=True)
     # sales = SaleSerializer(many=True)
-    # tasks = TaskSerializer(many=True)
+    tasks = TaskSerializer(many=True)
 
     class Meta:
         model = Company

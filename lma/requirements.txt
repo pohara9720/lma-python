@@ -16,7 +16,7 @@ docutils==0.15.2
 idna==2.10
 isort==5.5.2
 jmespath==0.10.0
-lazy-object-proxy==0.0.0
+lazy-object-proxy==1.5.1
 mccabe==0.6.1
 Pillow==7.2.0
 pycodestyle==2.6.0
