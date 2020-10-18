@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <style type='text/css'>
+        .container {
+            padding: 16px;
+            font-family: Rubik, Helvetica, Arial, serif;
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            margin-right: -15px;
+            margin-left: -15px;
+        }
+
+        .col-12 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+
+        .card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            word-wrap: break-word;
+            background-color: #FFF;
+            background-clip: border-box;
+            border: 0 solid #DFE3E7;
+            border-radius: .267rem;
+        }
+
+        .border {
+            border: 1px solid #DFE3E7 !important;
+        }
+
+        .card-body {
+            flex: 1 1 auto;
+            padding: 1.7rem;
+        }
+
+        .pb-0 {
+            padding-bottom: 0 !important;
+        }
+
+        .pt-0,
+        .py-0 {
+            padding-top: 0 !important;
+        }
+
+        .mx-25,
+        .mr-25 {
+            margin: 0 .25rem !important;
+        }
+
+        .mx-25,
+        .mr-25 {
+            margin: 0 .5rem !important;
+        }
+
+        .mr-3,
+        .mx-3 {
+            margin-right: 3rem !important;
+        }
+
+        .align-items-center {
+            align-items: center !important;
+        }
+
+        .flex-wrap {
+            flex-wrap: wrap !important;
+        }
+
+        .d-flex {
+            display: flex !important;
+        }
+
+        .text-muted {
+            color: #828D99 !important;
+        }
+
+        .mb-3,
+        .my-3 {
+            margin-bottom: 3rem !important;
+        }
+
+        .mt-3,
+        .my-3 {
+            margin-top: 3rem !important;
+        }
+
+        .col-6 {
+            flex: 0 0 50%;
+            max-width: 50%;
+        }
+
+        .col-6,
+        .col-7 {
+            -webkit-box-flex: 0;
+        }
+
+        .justify-content-end {
+            justify-content: flex-end !important;
+        }
+
+        .text-primary {
+            color: #5A8DEE !important;
+        }
+
+        .mt-1,
+        .my-1 {
+            margin-top: 1rem !important;
+        }
+
+        .mb-1,
+        .my-1 {
+            margin-bottom: 1rem !important;
+        }
+
+        .inside {
+            margin-left: 25px;
+        }
+
+        .table-responsive {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .ml-md-25,
+        .mx-md-25 {
+            margin: 0 .25rem !important;
+        }
+
+        .ml-25,
+        .mx-25 {
+            margin-left: .25rem !important;
+        }
+
+        .mb-0,
+        .my-0 {
+            margin-bottom: 0 !important;
+        }
+
+        .table {
+            width: 100%;
+            margin-bottom: 1rem;
+            color: #727E8C;
+        }
+
+        table {
+            border-collapse: collapse;
+        }
+
+        .table-borderless {
+            border: none !important;
+        }
+
+        .invoice-view-wrapper .invoice-product-details .table td,
+        .invoice-view-wrapper .invoice-product-details .table th {
+            padding: .75rem 2rem;
+        }
+
+        .table td,
+        .table th {
+            padding: 1.15rem 2rem;
+            vertical-align: top;
+            border-top: 1px solid #DFE3E7;
+            text-align: left;
+        }
+
+        .table td {
+            border-bottom: 1px solid #DFE3E7;
+        }
+
+        .table td,
+        .table th {
+            font-family: Rubik, Helvetica, Arial, serif;
+        }
+
+        .table td,
+        .table thead th {
+            vertical-align: middle;
+            border-top: none;
+        }
+
+        .text-primary {
+            color: #5A8DEE !important;
+        }
+
+        .font-weight-bold {
+            font-weight: 500 !important;
+        }
+
+        .text-right {
+            text-align: right !important;
+        }
+
+        .col-4 {
+            flex: 0 0 33.33333%;
+            max-width: 33.33333%;
+        }
+
+        .col-4,
+        .col-5 {
+            -webkit-box-flex: 0;
+        }
+
+        .mt-75,
+        .my-75 {
+            margin-top: .75rem !important;
+        }
+
+        .col-8 {
+            flex: 0 0 66.66667%;
+            max-width: 66.66667%;
+        }
+
+        .col-8,
+        .col-9 {
+            -webkit-box-flex: 0;
+        }
+
+        .invoice-footer {
+            display: flex;
+        }
+
+        .col,
+        .col-1,
+        .col-10,
+        .col-11,
+        .col-12,
+        .col-2,
+        .col-3,
+        .col-4,
+        .col-5,
+        .col-6,
+        .col-7,
+        .col-8,
+        .col-9,
+        .col-auto,
+        .col-lg,
+        .col-lg-1,
+        .col-lg-10,
+        .col-lg-11,
+        .col-lg-12,
+        .col-lg-2,
+        .col-lg-3,
+        .col-lg-4,
+        .col-lg-5,
+        .col-lg-6,
+        .col-lg-7,
+        .col-lg-8,
+        .col-lg-9,
+        .col-lg-auto,
+        .col-md,
+        .col-md-1,
+        .col-md-10,
+        .col-md-11,
+        .col-md-12,
+        .col-md-2,
+        .col-md-3,
+        .col-md-4,
+        .col-md-5,
+        .col-md-6,
+        .col-md-7,
+        .col-md-8,
+        .col-md-9,
+        .col-md-auto,
+        .col-sm,
+        .col-sm-1,
+        .col-sm-10,
+        .col-sm-11,
+        .col-sm-12,
+        .col-sm-2,
+        .col-sm-3,
+        .col-sm-4,
+        .col-sm-5,
+        .col-sm-6,
+        .col-sm-7,
+        .col-sm-8,
+        .col-sm-9,
+        .col-sm-auto,
+        .col-xl,
+        .col-xl-1,
+        .col-xl-10,
+        .col-xl-11,
+        .col-xl-12,
+        .col-xl-2,
+        .col-xl-3,
+        .col-xl-4,
+        .col-xl-5,
+        .col-xl-6,
+        .col-xl-7,
+        .col-xl-8,
+        .col-xl-9,
+        .col-xl-auto {
+            position: relative;
+            width: 100%;
+        }
+
+        .align-self-end {
+            align-self: flex-end !important;
+        }
+
+        .invoice-subtotal {
+            width: 90% !important;
+        }
+
+        .invoice-view-wrapper .invoice-subtotal .invoice-calc {
+            margin: .2rem 0;
+        }
+
+        .justify-content-between {
+            justify-content: space-between !important;
+        }
+
+        .invoice-view-wrapper .invoice-subtotal .invoice-calc .invoice-title {
+            width: 171px;
+        }
+
+        .invoice-view-wrapper .invoice-subtotal .invoice-calc .invoice-value {
+            color: #304156;
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+
+<body>
+    {% load multiply %}
+    <div class='container'>
+        <div class="row">
+            <div class="col-12">
+                <div class="card border">
+                    <div class="card-content">
+                        <div class="card-body pb-0 mx-25">
+                            <div class="row">
+                                <div class="col-12 mb-1">
+                                    <span class="invoice-number mr-50">Invoice#</span>
+                                    <span>{{invoice.number}}</span>
+                                </div>
+                                <div class="col-12">
+                                    <div class="d-flex align-items-center justify-content-xl-end flex-wrap">
+                                        <div class="mr-3">
+                                            <small class="text-muted">Date Issue:</small>
+                                            <span>{{invoice.issue_date}}</span>
+                                        </div>
+                                        <div>
+                                            <small class="text-muted">Date Due:</small>
+                                            <span>{{invoice.due_date}}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row my-3">
+                                <div class="col-6">
+                                    <h4 class="text-primary">Invoice</h4>
+                                    <span>{{invoice.title}}</span>
+                                </div>
+                                <div class="col-6 d-flex justify-content-end">
+                                    <img src="https://lma-images-bucket.s3.amazonaws.com/51ff6aa9-b432-440e-b871-8a2cee780186.png"
+                                        alt="logo" height="46" width='70' />
+                                </div>
+                            </div>
+                            <hr />
+                            <div class="row invoice-info">
+                                <div class="col-6 mt-1">
+                                    <h6 class="invoice-from">Bill From</h6>
+                                    <div class="mb-1">
+                                        <span>{{company.name}}</span>
+                                    </div>
+                                    <div class="mb-1">
+                                        <span>{{company.address.street}}
+                                            <span>{{company.address.city}},<span>{{company.address.state}}
+                                                    <span>{{company.address.zipcode}}</span>
+                                                </span>
+                                            </span>
+                                        </span>
+                                    </div>
+                                    <div class="mb-1">
+                                        <span>{{company.email}}</span>
+                                    </div>
+                                </div>
+                                <div class="col-6 mt-1">
+                                    <h6 class="invoice-to">Bill To</h6>
+                                    <div class="mb-1">
+                                        <span>{{invoice.bill_to_name}}</span>
+                                    </div>
+                                    <div class="mb-1">
+                                        <span>{{invoice.bill_to_address}}</span>
+                                    </div>
+                                    <div class="mb-1">
+                                        <span>{{invoice.email}}</span>
+                                    </div>
+                                    <div class="mb-1">
+                                        <span>{{invoice.phone}}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr />
+                        </div>
+                        <div class="invoice-product-details table-responsive mx-md-25">
+                            <table class="table table-borderless mb-0">
+                                <thead>
+                                    <tr class="border-0">
+                                        <th scope="col">Type</th>
+                                        <th scope="col">Item</th>
+                                        <th scope="col">Description</th>
+                                        <th scope="col">Cost</th>
+                                        <th scope="col">Qty</th>
+                                        <th scope="col" class="text-right">Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sale in invoice.items %}
+                                    <tr>
+                                        <td>{{sale.type}}</td>
+                                        <td>
+                                            {% if sale.animal %}
+                                            <span>{{sale.animal.name}}
+                                                <span>Tag#({{sale.animal.tag_number}})</span></span>
+                                            {% else %}
+                                            <span>Tank#({{sale.inventory.tank_number}})</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{sale.description}}</td>
+                                        <td>{{sale.cost}}</td>
+                                        <td>{{sale.quantity}}</td>
+                                        <td class="text-primary text-right font-weight-bold">
+                                            {% multiply sale.quantity sale.cost %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="card-body pt-0 mx-25">
+                            <!-- <hr /> -->
+                            <div class="row">
+                                <div class="col-4 mt-75 invoice-footer">
+                                    <div class="row d-flex">
+                                        <div class="col-12 align-self-end inside">
+                                            <p>Thanks for your business.</p>
+                                            <p>Created using Livestock Manager</p>
+                                            <p>LLC.at livestockmanagerapp.com.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-8 d-flex justify-content-end mt-75">
+                                    <div class="invoice-subtotal">
+                                        <div class="invoice-calc d-flex justify-content-between">
+                                            <span class="invoice-title">Status</span>
+                                            <span class="invoice-value text-primary text-right font-weight-bold">
+                                                {{invoice.status}}
+                                            </span>
+                                        </div>
+                                        <!-- <hr /> -->
+                                        <div class="invoice-calc d-flex justify-content-between">
+                                            <span class="invoice-title mt-1">Invoice Total</span>
+                                            <span class="invoice-value mt-1">{{invoice.total}}</span>
+                                        </div>
+                                        <div class="invoice-calc d-flex justify-content-between">
+                                            <span class="invoice-title mt-1">Balance (USD)</span>
+                                            <span class="invoice-value mt-1">{{invoice.total}}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

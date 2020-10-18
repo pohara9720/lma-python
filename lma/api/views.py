@@ -10,9 +10,11 @@ from rest_framework import viewsets
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.shortcuts import render
+from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
 from rest_framework.decorators import action
-from django.db.models import F
+from django.db.models import F, Q
+import datetime
 
 from .models import (
     User,
@@ -57,10 +59,31 @@ class UserViewSet(viewsets.ModelViewSet):
     # permission_classes = [IsAuthenticated]
     # authentication_classes = [TokenAuthentication]
 
+    @action(detail=True, methods=['get'])
+    def retrieve_subscription(self, request, pk=None):
+        sub = Stripe.retrieve_subscription(pk)
+        return Response(sub)
+
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def change_password(self, request, pk=None):
+        user = Util.authenticate(request, True)
+        password = request.data['password']
+        user.set_password(password)
+        user.save()
+        serializer = self.get_serializer(user)
+        return Response(serializer.data)
+
     @action(detail=False, methods=['post'])
     def get_active_user(self, request, pk=None, authentication_classes=[TokenAuthentication]):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         return Response(user)
+
+    @action(detail=False, methods=['post'])
+    def update_subscription(self, request, pk=None):
+        price_id = request.data['price']
+        sub_id = request.data['id']
+        updated = Stripe.update_subscription(sub_id, price_id)
+        return Response(updated)
 
     @action(detail=True, methods=['post'])
     def register(self, request, pk=None):
@@ -80,72 +103,100 @@ class UserViewSet(viewsets.ModelViewSet):
             role=role,
             address=user_address,
             company=company,
-            is_active=True
         )
         user.set_password(password)
         user.save()
         serializer = UserSerializer(instance=user, context={
             'request': request})
-
         token = Token.objects.create(user=user).key
-        current_site = get_current_site(request).domain
-        link = reverse('verify-email')
-        absurl = 'http://'+current_site+link+"?token="+token
+        url = settings.REACT_DOMAIN+'verify-email/'+token
         email_body = 'Hi '+user.first_name+' '+user.last_name + \
-            ' Use the link below to verify your email \n' + absurl
-        email_data = {'email_body': email_body, 'to_email': user.email,
+            ' Use the link below to verify your email \n' + url
+        email_data = {'email_body': email_body, 'to_email': [user.email],
                       'email_subject': 'Verify your email'}
         Util.send_email(email_data)
 
         return Response(serializer.data)
 
-    @ action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'])
     def resend_email(self, request, pk=None):
+        activation = request.data.get('activation')
         email = request.data['email']
-        current_site = get_current_site(request).domain
-        absurl = 'http://'+current_site+"/login"
-        email_body = 'You have been invited to use Livestock Manager'
-        ' Use the link below to login using your email as your email and password /n' + absurl
-        email_data = {'email_body': email_body, 'to_email': email,
-                      'email_subject': 'Please accept your invite'}
-        Util.send_email(email_data)
-        return Response('Email Sent')
+        if activation is not None:
+            user = User.objects.get(email=email)
+            token = Token.objects.get(user=user).key
+            url = settings.REACT_DOMAIN+'verify-email/'+token
+            email_body = 'Hi '+user.first_name+' '+user.last_name + \
+                ' Use the link below to verify your email \n' + url
+            email_data = {'email_body': email_body, 'to_email': [user.email],
+                          'email_subject': 'Verify your email'}
+            Util.send_email(email_data)
+            return Response('Email Sent')
+        else:
+            url = settings.REACT_DOMAIN+'login'
+            email_body = 'You have been invited to use Livestock Manager. Use the link below to login using your email as your email and password ' + url
+            email_data = {'email_body': email_body, 'to_email': [email],
+                          'email_subject': 'Please accept your invite'}
+            Util.send_email(email_data)
+            return Response('Email Sent')
 
-    def create(self, request, authentication_classes=[TokenAuthentication]):
-        user = Util.authenticate(request)
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def search(self, request, pk=None):
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
-        current_site = get_current_site(request).domain
-        absurl = 'http://'+current_site+"/login"
-        email_body = 'Hello,'
-        " You've been invited to use Livestock Manager. Please click the link to login using your email as your email and password. Password can be changed after in your profile \n" + absurl
-        emails = request.data['emails']
+        value = request.data['value']
+        users = User.objects.filter(
+            Q(
+                first_name__icontains=value, company=company
+            ) | Q(
+                last_name__icontains=value, company=company
+            )
+        )
+        page = self.paginate_queryset(users)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(users, many=True)
+            return Response(serializer.data)
 
+    def create(self, request, authentication_classes=[TokenAuthentication]):
+        user = Util.authenticate(request, False)
+        company_id = user['company']['id']
+        company = Company.objects.get(id=company_id)
+        url = settings.REACT_DOMAIN + 'login'
+        emails = request.data['emails']
+        email_body = "Hello, You've been invited to use Livestock Manager. Please click the link to login using your email as your email and password. Password can be changed after in your profile " + url
+        email_data = {'email_body': email_body, 'to_email': emails,
+                      'email_subject': "You've been invited to Livestock Manager"}
         users = []
         for email in emails:
-            user = User(email=email, role='USER',
+            user = User(email=email, role='USER', is_active=True,
                         company=company)
             user.set_password(email)
             user.save()
             serializer = UserSerializer(instance=user, context={
                 'request': request})
             users.append(serializer.data)
-            email_data = {'email_body': email_body, 'to_email': email,
-                          'email_subject': "You've been invited to Livestock Manager"}
-            Util.send_email(email_data)
 
+        Util.send_email(email_data)
         return Response(users)
 
     def list(self, request, authentication_classes=[TokenAuthentication]):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
         serializer = CompanySerializer(instance=company, context={
             'request': request})
-        return Response(serializer.data['users'])
+        page = self.paginate_queryset(serializer.data['users'])
+        if page is not None:
+            return self.get_paginated_response(page)
+        else:
+            return Response(serializer.data['users'])
 
     def partial_update(self, request, pk=None, authentication_classes=[TokenAuthentication]):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         street = request.data['street']
         state = request.data['state']
         city = request.data['city']
@@ -171,22 +222,54 @@ class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
     # permission_classes = [IsAuthenticated]
 
+    @action(detail=False, methods=['get'])
+    def get_upcoming_births(self, request):
+        companies = Company.objects.all()
+        serializer = self.get_serializer(companies, many=True)
+        results = []
+        for company in serializer.data:
+            tasks = company.get('tasks')
+            if tasks is not None:
+                def is_next_week(x):
+                    d = datetime.datetime.strptime(x, "%Y-%m-%d")
+                    now = datetime.datetime.now()
+                    return (d - now).days < 7
+
+                def breeding(t):
+                    is_breeding = t.get('due_date')
+                    if is_breeding is None:
+                        return False
+                    elif is_next_week(is_breeding):
+                        return True
+                    else:
+                        return False
+
+                filtered = filter(breeding, tasks)
+                has_results = len(list(filtered)) > 0
+                if has_results:
+                    results.append({
+                        "email": company['email'],
+                        "tasks": filtered
+                    })
+
+        return Response(results)
+
     @action(detail=True, methods=['get'])
     def get_stripe_account(self, request, pk=None):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         if user['role'] == 'ADMIN':
             data = Stripe.retrieve_account(pk)
             return Response(data)
 
     @action(detail=True, methods=['post'])
     def update_stripe_account(self, request, pk=None):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         if user['role'] == 'ADMIN':
             data = Stripe.update_account(request, pk)
             return Response(data)
 
     def partial_update(self, request, pk=None, authentication_classes=[TokenAuthentication]):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         data = request.data
         name = data['name']
         street = data['street']
@@ -230,6 +313,59 @@ class AnimalViewSet(viewsets.ModelViewSet):
         pdf = Util.export_pdf(request, 'animals.pdf', table_data)
         return pdf
 
+    @action(detail=False, methods=['post'])
+    def delete_attachment(self, request):
+        url = request.data['url']
+        animal_id = request.data['id']
+        Util.delete_file(url)
+        animal = Animal.objects.get(id=animal_id)
+        animal.attachment = None
+        animal.save()
+        serializer = self.get_serializer(animal)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def search(self, request, pk=None):
+        user = Util.authenticate(request, False)
+        company_id = user['company']['id']
+        company = Company.objects.get(id=company_id)
+        value = request.data['value']
+        animals = Animal.objects.filter(
+            Q(name__icontains=value, company=company) | Q(
+                tag_number__icontains=value, company=company)
+        )
+        page = self.paginate_queryset(animals)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(animals, many=True)
+            return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def bred_info(self, request, pk=None):
+        animal = Animal.objects.get(id=pk)
+        breed_set = BreedingSet.objects.filter(
+            Q(female=animal) | Q(animal_semen=animal)).first()
+        if breed_set is not None:
+            breed_set.task_set.all()
+            serializer = BreedingSetSerializer(instance=breed_set, context={
+                'request': request})
+            return Response(serializer.data)
+        else:
+            return Response([])
+
+    @action(detail=True, methods=['get'])
+    def by_type(self, request, pk=None):
+        animals = Animal.objects.filter(type=pk)
+        page = self.paginate_queryset(animals)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(animals, many=True)
+            return Response(serializer.data)
+
     @action(detail=True, methods=['post'])
     def get_tasks(self, request, pk=None):
         animal = Animal.objects.get(id=pk)
@@ -240,7 +376,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def get_parents(self, request, pk=None):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         type = request.data['type']
         males = ['BULL', 'STEER', 'WETHER', 'RAM',
@@ -268,75 +404,100 @@ class AnimalViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def get_offspring(self, request, pk=None):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         sub_type = request.data['sub_type']
         animal_id = request.data['id']
+        animal = Animal.objects.get(id=animal_id)
         males = ['BULL', 'STEER', 'WETHER', 'RAM',
                  'STUD', 'GELDING', 'BOAR', 'BARROW', 'BUCK']
         if sub_type in males:
             children = Animal.objects.filter(
-                company=company_id, father=animal_id)
+                company=company_id, father=animal)
             serializer = self.get_serializer(children, many=True)
             return Response(serializer.data)
         else:
             children = Animal.objects.filter(
-                company=company_id, mother=animal_id)
+                company=company_id, mother=animal)
             serializer = self.get_serializer(children, many=True)
             return Response(serializer.data)
 
     def list(self, request):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         animals = Animal.objects.filter(company=company_id)
         page = self.paginate_queryset(animals)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(animals, many=True)
-        return Response(serializer.data)
+        else:
+            serializer = self.get_serializer(animals, many=True)
+            return Response(serializer.data)
 
     def create(self, request):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
         data = request.data
         header_image = Util.upload_file(data['header_image'])
+        breed = data.get('breed')
         profile_image = Util.upload_file(data['profile_image'])
         attachment_file = data.get("attachment")
         attachment = None if attachment_file == None else Util.upload_file(
             attachment_file)
+        father = None if data.get(
+            'father') == None else Animal.objects.get(id=data['father'])
+        mother = None if data.get(
+            'mother') == None else Animal.objects.get(id=data['mother'])
+        father_placeholder = data.get('father_placeholder')
+        mother_placeholder = data.get('mother_placeholder')
+
         new_animal = Animal.objects.create(
             name=data['name'],
             type=data['type'],
             sub_type=data['sub_type'],
+            breed=breed,
             header_image=header_image,
             profile_image=profile_image,
             tag_number=data['tag_number'],
             registration_number=data['registration_number'],
             dob=data['dob'],
-            father=data['father'],
-            mother=data['mother'],
+            father=father,
+            mother=mother,
             attachment=attachment,
-            company=company
+            company=company,
+            father_placeholder=father_placeholder,
+            mother_placeholder=mother_placeholder
         )
         serializer = self.get_serializer(new_animal)
         return Response(serializer.data)
 
     def retrieve(self, request, pk=None):
-        def serialize(animal_id):
-            if animal_id == 'N/A':
-                return animal_id
-            else:
-                animal = Animal.objects.get(id=animal_id)
-                serializer = self.get_serializer(animal)
-                return serializer.data
+        animal = Animal.objects.get(id=pk)
+        serializer = self.get_serializer(animal)
+        return Response(serializer.data)
 
-        primary = serialize(pk)
-        primary['father'] = serialize(primary['father'])
-        primary['mother'] = serialize(primary['mother'])
-        return Response(primary)
+    def partial_update(self, request, pk=None):
+        data = request.data
+        sub_type = data['sub_type']
+        tag_number = data['tag_number']
+        registration_number = data['registration_number']
+        breed = data.get('breed')
+        name = data['name']
+        attachment_file = data.get('attachment')
+        attachment = None if attachment_file == None else Util.upload_file(
+            attachment_file)
+        Animal.objects.filter(id=pk).update(
+            sub_type=sub_type,
+            tag_number=tag_number,
+            registration_number=registration_number,
+            breed=breed,
+            name=name,
+            attachment=attachment
+        )
+        updated = Animal.objects.get(id=pk)
+        serializer = self.get_serializer(updated)
+        return Response(serializer.data)
 
 
 class InventoryViewSet(viewsets.ModelViewSet):
@@ -351,8 +512,38 @@ class InventoryViewSet(viewsets.ModelViewSet):
         return pdf
 
     @action(detail=False, methods=['post'])
+    def search(self, request, pk=None):
+        user = Util.authenticate(request, False)
+        company_id = user['company']['id']
+        company = Company.objects.get(id=company_id)
+        value = request.data['value']
+        inventory = Inventory.objects.filter(
+            Q(top_id__icontains=value, company=company) | Q(
+                tank_number__icontains=value, company=company)
+        )
+        page = self.paginate_queryset(inventory)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(inventory, many=True)
+            return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def by_type(self, request, pk=None):
+        inventory = Inventory.objects.filter(category=pk)
+        serializer = self.get_serializer(inventory, many=True)
+        page = self.paginate_queryset(inventory)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(inventory, many=True)
+            return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
     def get_breeding_sets(self, request, pk=None):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
         animal_category = request.data['type']
@@ -372,12 +563,6 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 males.append(animal)
             else:
                 females.append(animal)
-        for item in inventory_serializer.data:
-            father = Animal.objects.get(id=item['father'])
-            father_serializer = AnimalSerializer(instance=father, context={
-                'request': request})
-            item['father'] = father_serializer.data
-
         response = {
             "females": females,
             "semen": [*inventory_serializer.data, *males]
@@ -385,26 +570,21 @@ class InventoryViewSet(viewsets.ModelViewSet):
         return Response(response)
 
     def list(self, request):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
         inventory = Inventory.objects.filter(company=company)
-        serializer = self.get_serializer(inventory, many=True)
+        page = self.paginate_queryset(inventory)
 
-        def get_parent(animal_id):
-            if animal_id is not None:
-                animal = Animal.objects.get(id=animal_id)
-                parent_serializer = AnimalSerializer(instance=animal, context={
-                    'request': request})
-                return parent_serializer.data
-
-        for item in serializer.data:
-            item['father'] = get_parent(item.get('father'))
-            item['mother'] = get_parent(item.get('mother'))
-        return Response(serializer.data)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(inventory, many=True)
+            return Response(serializer.data)
 
     def create(self, request, pk=None):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
         data = request.data
@@ -413,8 +593,12 @@ class InventoryViewSet(viewsets.ModelViewSet):
         tank_number = data['tank_number']
         canister_number = data['canister_number']
         top_id = data['top_id']
-        father = data.get('father')
-        mother = data.get('mother')
+        father_id = data.get('father')
+        father = None if father_id == None or father_id == 'N/A' else Animal.objects.get(
+            id=father_id)
+        mother_id = data.get('mother')
+        mother = None if mother_id == None or mother_id == 'N/A' else Animal.objects.get(
+            id=mother_id)
         units = data['units']
         animal_category = data['animal_category']
         inventory = Inventory.objects.create(
@@ -430,23 +614,25 @@ class InventoryViewSet(viewsets.ModelViewSet):
             company=company
         )
         serializer = self.get_serializer(inventory)
+        return Response(serializer.data)
 
-        def get_parent(animal_id):
-            if animal_id is not None:
-                animal = Animal.objects.get(id=animal_id)
-                parent_serializer = AnimalSerializer(instance=animal, context={
-                    'request': request})
-                return parent_serializer.data
-
-        father_data = get_parent(father)
-        mother_data = get_parent(mother)
-        response = {
-            **serializer.data,
-            "father": father_data,
-            "mother": mother_data
-        }
-
-        return Response(response)
+    def partial_update(self, request, pk=None):
+        data = request.data
+        cost = data['cost']
+        tank_number = data['tank_number']
+        canister_number = data['canister_number']
+        top_id = data['top_id']
+        units = data['units']
+        Inventory.objects.filter(id=pk).update(
+            cost=cost,
+            tank_number=tank_number,
+            canister_number=canister_number,
+            top_id=top_id,
+            units=units
+        )
+        inventory = Inventory.objects.get(id=pk)
+        serializer = self.get_serializer(inventory)
+        return Response(serializer.data)
 
 
 class InvoiceItemViewSet(viewsets.ModelViewSet):
@@ -466,16 +652,103 @@ class SaleViewSet(viewsets.ModelViewSet):
         pdf = Util.export_pdf(request, 'sales.pdf', table_data)
         return pdf
 
+    @action(detail=True, methods=['get'])
+    def by_type(self, request, pk=None):
+        sales = Sale.objects.filter(status=pk)
+        page = self.paginate_queryset(sales)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(sales, many=True)
+            return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def download_invoice(self, request, pk=None):
+        user = Util.authenticate(request, False)
+        company_id = user['company']['id']
+        company = Company.objects.get(id=company_id)
+        cs = CompanySerializer(instance=company, context={
+            'request': request})
+        sale = Sale.objects.get(id=pk)
+        ss = self.get_serializer(sale)
+        params = {'invoice': ss.data,
+                  'company': cs.data}
+        pdf = Util.create_invoice_file(params, True)
+        return pdf
+
+    @action(detail=False, methods=['post'])
+    def change_to_paid(self, request):
+        invoices = request.data['invoices']
+        for invoice in invoices:
+            sale = Sale.objects.get(id=invoice['id'])
+            items = InvoiceItem.objects.filter(sale=sale)
+            for item in items:
+                if item.type == 'LIVESTOCK':
+                    print(item.animal)
+                else:
+                    inventory = item.inventory
+                    inventory.units = 0 if inventory.units - \
+                        item.quantity < 0 else inventory.units - item.quantity
+                    inventory.save()
+            sale.status = 'PAID'
+            sale.save()
+        return Response({'status': 200})
+
+    @action(detail=False, methods=['post'])
+    def resend_invoices(self, request):
+        user = Util.authenticate(request, False)
+        company_id = user['company']['id']
+        company = Company.objects.get(id=company_id)
+        cs = CompanySerializer(instance=company, context={
+            'request': request})
+        for invoice in request.data['invoices']:
+            email = invoice['email']
+            sale_id = invoice['id']
+            sale = Sale.objects.get(id=sale_id)
+            serializer = self.get_serializer(sale)
+            params = {'invoice': serializer.data,
+                      'company': cs.data}
+            html = Util.create_invoice_file(params, False)
+            email_body = 'Your invoice is below.'
+            email_data = {'email_body': email_body, 'to_email': [email],
+                          'email_subject': 'You have been sent an invoice via Livestock Manager', 'html': html}
+            Util.send_email(email_data)
+        return Response('Email Sent')
+
+    @action(detail=False, methods=['post'])
+    def search(self, request, pk=None):
+        user = Util.authenticate(request, False)
+        company_id = user['company']['id']
+        company = Company.objects.get(id=company_id)
+        value = request.data['value']
+        sales = Sale.objects.filter(
+            Q(bill_to_name__icontains=value, company=company) | Q(
+                number__icontains=value, company=company)
+        )
+        page = self.paginate_queryset(sales)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(sales, many=True)
+            return Response(serializer.data)
+
     def list(self, request):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
         sales = Sale.objects.filter(company=company)
-        serializer = self.get_serializer(sales, many=True)
-        return Response(serializer.data)
+        page = self.paginate_queryset(sales)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(sales, many=True)
+            return Response(serializer.data)
 
     def create(self, request):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         data = request.data
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
@@ -485,9 +758,10 @@ class SaleViewSet(viewsets.ModelViewSet):
         title = data['title']
         bill_to_name = data['bill_to_name']
         bill_to_address = data['bill_to_address']
-        email = data['email']
+        email = data['bill_to_email']
         phone = data['phone']
         status = 'UNPAID'
+        total = data['total']
         invoice_items = data['invoice_items']
         sale = Sale(
             number=number,
@@ -499,14 +773,15 @@ class SaleViewSet(viewsets.ModelViewSet):
             phone=phone,
             email=email,
             status=status,
+            total=total,
             company=company
         )
         sale.save()
         for item in invoice_items:
-            cost = item['cost']
+            cost = int(item['cost'])
             description = item['description']
-            quantity = item['quantity']
-            if item['type'] == 'animal':
+            quantity = int(item['quantity'])
+            if item['type'] == 'LIVESTOCK':
                 animal = Animal.objects.get(id=item['item'])
                 invoice_item = InvoiceItem(
                     type=item['type'],
@@ -530,11 +805,18 @@ class SaleViewSet(viewsets.ModelViewSet):
                     sale=sale
                 )
                 invoice_item.save()
-        email_body = 'Your invoice is below. '
-        email_data = {'email_body': email_body, 'to_email': email,
+
+        serializer = self.get_serializer(sale)
+        company_serializer = CompanySerializer(instance=company, context={
+            'request': request})
+        params = {'invoice': serializer.data,
+                  'company': company_serializer.data}
+        pdf = Util.create_invoice_file(params, False)
+        email_body = 'Your invoice is below.'+pdf
+        email_data = {'email_body': email_body, 'to_email': [email],
                       'email_subject': 'You have been sent an invoice via Livestock Manager'}
         Util.send_email(email_data)
-        serializer = self.get_serializer(sale)
+
         return Response(serializer.data)
 
 
@@ -545,11 +827,23 @@ class TaskViewset(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def change_status(self, request, pk=None):
-        task = Task.objects.filter(id=pk).update(completed=not(F('completed')))
-        return Response(task)
+        outdated = Task.objects.get(id=pk)
+        outdated.completed = not outdated.completed
+        outdated.save()
+        task = Task.objects.get(id=pk)
+        if task.category == 'BREEDING':
+            sets = task.breeding_sets.all()
+            for s in sets:
+                semen = s.inventory_semen
+                if semen is not None:
+                    inventory = Inventory.objects.get(id=semen.id)
+                    inventory.units = inventory.units - 1
+                    inventory.save()
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
 
     def list(self, request):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         role = user['role']
         if role == 'ADMIN':
             tasks = Task.objects.all()
@@ -562,7 +856,7 @@ class TaskViewset(viewsets.ModelViewSet):
             return Response(serializer.data)
 
     def create(self, request, pk=None):
-        user = Util.authenticate(request)
+        user = Util.authenticate(request, False)
         data = request.data
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)

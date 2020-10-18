@@ -85,6 +85,7 @@ class AnimalSerializer(serializers.HyperlinkedModelSerializer):
             'id',
             'name',
             'type',
+            'breed',
             'sub_type',
             'header_image',
             'profile_image',
@@ -97,11 +98,24 @@ class AnimalSerializer(serializers.HyperlinkedModelSerializer):
             'company',
             'expenses',
             'mother_to',
-            'father_to'
+            'father_to',
+            'sire',
+            'dam',
+            'father_placeholder',
+            'mother_placeholder'
         ]
+
+    def get_fields(self):
+        fields = super(AnimalSerializer, self).get_fields()
+        fields['father'] = AnimalSerializer()
+        fields['mother'] = AnimalSerializer()
+        return fields
 
 
 class InventorySerializer(serializers.HyperlinkedModelSerializer):
+    father = AnimalSerializer()
+    mother = AnimalSerializer()
+
     class Meta:
         model = Inventory
         fields = [
@@ -156,7 +170,7 @@ class BreedingSetSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class SaleSerializer(serializers.HyperlinkedModelSerializer):
-    # items = InvoiceItemSerializer(many=True)
+    items = InvoiceItemSerializer(many=True)
 
     class Meta:
         model = Sale
@@ -172,7 +186,8 @@ class SaleSerializer(serializers.HyperlinkedModelSerializer):
             'status',
             'phone',
             'company',
-            'items'
+            'items',
+            'total'
         ]
 
 

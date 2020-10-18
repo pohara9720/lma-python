@@ -83,7 +83,7 @@ ROOT_URLCONF = 'lma.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': ['templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -152,8 +152,9 @@ STATIC_URL = '/static/'
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
 EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_POST = 587
+EMAIL_PORT = 587
 EMAIL_HOST_USER = env('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 
@@ -178,3 +179,6 @@ STRIPE_PRICE_PROFESSIONAL_TIER_MONTHLY = env(
     'STRIPE_PRICE_PROFESSIONAL_TIER_MONTHLY')
 STRIPE_PRICE_PROFESSIONAL_TIER_ANNUALLY = env(
     'STRIPE_PRICE_PROFESSIONAL_TIER_ANNUALLY')
+
+# FRONTEND
+REACT_DOMAIN = env('REACT_DOMAIN')

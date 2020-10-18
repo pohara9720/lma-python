@@ -64,8 +64,12 @@ class Animal(models.Model):
     registration_number = models.CharField(max_length=50)
     dob = models.DateField()
     breed = models.CharField(max_length=50)
-    father = models.CharField(max_length=50)
-    mother = models.CharField(max_length=50)
+    father = models.ForeignKey(
+        'self', related_name='sire', default='', on_delete=models.CASCADE, null=True)
+    mother = models.ForeignKey(
+        'self', related_name='dam', default='', on_delete=models.CASCADE, null=True)
+    father_placeholder = models.CharField(max_length=50, null=True)
+    mother_placeholder = models.CharField(max_length=50, null=True)
     attachment = models.CharField(max_length=150, null=True)
     # Relationships
     company = models.ForeignKey(
@@ -80,8 +84,12 @@ class Inventory(models.Model):
     tank_number = models.IntegerField()
     canister_number = models.IntegerField()
     top_id = models.IntegerField()
-    father = models.CharField(max_length=50, null=True)
-    mother = models.CharField(max_length=50, null=True)
+    father = models.ForeignKey(
+        Animal, related_name='father_of', default='', on_delete=models.CASCADE, null=True
+    )
+    mother = models.ForeignKey(
+        Animal, related_name='mother_of', default='', on_delete=models.CASCADE, null=True
+    )
     units = models.IntegerField()
     animal_category = models.CharField(max_length=50, default='')
     # Relationships
@@ -127,7 +135,8 @@ class Task(models.Model):
     # expenses = models.ManyToManyField(Expense)
     breeding_sets = models.ManyToManyField(BreedingSet)
     company = models.ForeignKey(
-        Company, related_name='tasks', default='', on_delete=models.CASCADE)
+        Company, related_name='tasks', default='', on_delete=models.CASCADE
+    )
 
 
 class Sale(models.Model):
@@ -141,6 +150,7 @@ class Sale(models.Model):
     email = models.EmailField()
     status = models.CharField(max_length=50)
     phone = models.IntegerField()
+    total = models.IntegerField(default=0)
     # Relationships
     company = models.ForeignKey(
         Company, related_name='sales', default='', on_delete=models.CASCADE)
@@ -157,10 +167,10 @@ class InvoiceItem(models.Model):
     description = models.CharField(max_length=150, default="")
     # Relationships
     inventory = models.ForeignKey(
-        Inventory, related_name='invoice_items', default='', on_delete=models.CASCADE
+        Inventory, related_name='invoice_items', default='', on_delete=models.CASCADE, null=True
     )
-    models.ForeignKey(
-        Animal, related_name='invoice_items', default='', on_delete=models.CASCADE
+    animal = models.ForeignKey(
+        Animal, related_name='invoice_items', default='', on_delete=models.CASCADE, null=True
     )
     sale = models.ForeignKey(Sale, related_name='items', default='',
                              on_delete=models.CASCADE)
