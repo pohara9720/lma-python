@@ -15,6 +15,7 @@ from django.contrib.sites.shortcuts import get_current_site
 from rest_framework.decorators import action
 from django.db.models import F, Q
 import datetime
+from json import loads, dumps
 
 from .models import (
     User,
@@ -59,7 +60,7 @@ class UserViewSet(viewsets.ModelViewSet):
     # permission_classes = [IsAuthenticated]
     # authentication_classes = [TokenAuthentication]
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], authentication_classes=[TokenAuthentication])
     def retrieve_subscription(self, request, pk=None):
         sub = Stripe.retrieve_subscription(pk)
         return Response(sub)
@@ -73,12 +74,12 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(user)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'])
-    def get_active_user(self, request, pk=None, authentication_classes=[TokenAuthentication]):
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def get_active_user(self, request, pk=None):
         user = Util.authenticate(request, False)
         return Response(user)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
     def update_subscription(self, request, pk=None):
         price_id = request.data['price']
         sub_id = request.data['id']
@@ -220,7 +221,6 @@ class UserViewSet(viewsets.ModelViewSet):
 class CompanyViewSet(viewsets.ModelViewSet):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
-    # permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=['get'])
     def get_upcoming_births(self, request):
@@ -254,14 +254,14 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
         return Response(results)
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], authentication_classes=[TokenAuthentication])
     def get_stripe_account(self, request, pk=None):
         user = Util.authenticate(request, False)
         if user['role'] == 'ADMIN':
             data = Stripe.retrieve_account(pk)
             return Response(data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], authentication_classes=[TokenAuthentication])
     def update_stripe_account(self, request, pk=None):
         user = Util.authenticate(request, False)
         if user['role'] == 'ADMIN':
@@ -307,13 +307,31 @@ class AnimalViewSet(viewsets.ModelViewSet):
     serializer_class = AnimalSerializer
     authentication_classes = [TokenAuthentication]
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], authentication_classes=[TokenAuthentication])
     def get_pdf(self, request):
         table_data = Util.get_pdf_data(request, 'animal')
         pdf = Util.export_pdf(request, 'animals.pdf', table_data)
         return pdf
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def upload_csv(self, request, pk=None):
+        user = Util.authenticate(request, False)
+        company_id = user['company']['id']
+        company = Company.objects.get(id=company_id)
+        animals = []
+        fieldnames = ['Username', 'Identifier',
+                      'First name', 'Last name']
+        csv_file = request.data['csv']
+        rows = Util.csv_data(csv_file, fieldnames)
+        for row in rows:
+            o = loads(dumps(row))
+            animal = Animal(
+                company=company
+            )
+            animals.append(animal)
+        # Animal.objects.bulk_create(animals)
+
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
     def delete_attachment(self, request):
         url = request.data['url']
         animal_id = request.data['id']
@@ -324,7 +342,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(animal)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
     def search(self, request, pk=None):
         user = Util.authenticate(request, False)
         company_id = user['company']['id']
@@ -342,20 +360,28 @@ class AnimalViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(animals, many=True)
             return Response(serializer.data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], authentication_classes=[TokenAuthentication])
     def bred_info(self, request, pk=None):
         animal = Animal.objects.get(id=pk)
         breed_set = BreedingSet.objects.filter(
             Q(female=animal) | Q(animal_semen=animal)).first()
         if breed_set is not None:
-            breed_set.task_set.all()
             serializer = BreedingSetSerializer(instance=breed_set, context={
                 'request': request})
-            return Response(serializer.data)
+            breed_id = serializer.data['id']
+            task = Task.objects.filter(breeding_sets__id=breed_id).first()
+            task_serializer = TaskSerializer(instance=task, context={
+                'request': request})
+            response = {
+                'set': serializer.data,
+                'due_date': task_serializer.data['due_date'],
+                'task_due_date': task_serializer.data['task_due_date']
+            }
+            return Response(response)
         else:
             return Response([])
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], authentication_classes=[TokenAuthentication])
     def by_type(self, request, pk=None):
         animals = Animal.objects.filter(type=pk)
         page = self.paginate_queryset(animals)
@@ -366,7 +392,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(animals, many=True)
             return Response(serializer.data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], authentication_classes=[TokenAuthentication])
     def get_tasks(self, request, pk=None):
         animal = Animal.objects.get(id=pk)
         tasks = animal.task_set.all()
@@ -374,7 +400,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
             'request': request}, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
     def get_parents(self, request, pk=None):
         user = Util.authenticate(request, False)
         company_id = user['company']['id']
@@ -402,7 +428,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
                     dams.append(animal)
             return Response({"father": sires, "mother": dams})
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
     def get_offspring(self, request, pk=None):
         user = Util.authenticate(request, False)
         company_id = user['company']['id']
@@ -422,7 +448,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(children, many=True)
             return Response(serializer.data)
 
-    def list(self, request):
+    def list(self, request, authentication_classes=[TokenAuthentication]):
         user = Util.authenticate(request, False)
         company_id = user['company']['id']
         animals = Animal.objects.filter(company=company_id)
@@ -434,7 +460,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(animals, many=True)
             return Response(serializer.data)
 
-    def create(self, request):
+    def create(self, request, authentication_classes=[TokenAuthentication]):
         user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
@@ -472,12 +498,12 @@ class AnimalViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(new_animal)
         return Response(serializer.data)
 
-    def retrieve(self, request, pk=None):
+    def retrieve(self, request, pk=None, authentication_classes=[TokenAuthentication]):
         animal = Animal.objects.get(id=pk)
         serializer = self.get_serializer(animal)
         return Response(serializer.data)
 
-    def partial_update(self, request, pk=None):
+    def partial_update(self, request, pk=None, authentication_classes=[TokenAuthentication]):
         data = request.data
         sub_type = data['sub_type']
         tag_number = data['tag_number']
@@ -505,13 +531,19 @@ class InventoryViewSet(viewsets.ModelViewSet):
     serializer_class = InventorySerializer
     authentication_classes = [TokenAuthentication]
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], authentication_classes=[TokenAuthentication])
     def get_pdf(self, request):
         table_data = Util.get_pdf_data(request, 'inventory')
         pdf = Util.export_pdf(request, 'inventory.pdf', table_data)
         return pdf
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def upload_csv(self, request, pk=None):
+        user = Util.authenticate(request, False)
+        company_id = user['company']['id']
+        company = Company.objects.get(id=company_id)
+
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
     def search(self, request, pk=None):
         user = Util.authenticate(request, False)
         company_id = user['company']['id']
@@ -529,7 +561,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(inventory, many=True)
             return Response(serializer.data)
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], authentication_classes=[TokenAuthentication])
     def by_type(self, request, pk=None):
         inventory = Inventory.objects.filter(category=pk)
         serializer = self.get_serializer(inventory, many=True)
@@ -541,7 +573,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(inventory, many=True)
             return Response(serializer.data)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
     def get_breeding_sets(self, request, pk=None):
         user = Util.authenticate(request, False)
         company_id = user['company']['id']
@@ -569,7 +601,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
         }
         return Response(response)
 
-    def list(self, request):
+    def list(self, request, authentication_classes=[TokenAuthentication]):
         user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
@@ -583,7 +615,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(inventory, many=True)
             return Response(serializer.data)
 
-    def create(self, request, pk=None):
+    def create(self, request, pk=None, authentication_classes=[TokenAuthentication]):
         user = Util.authenticate(request, False)
         company_id = user['company']['id']
         company = Company.objects.get(id=company_id)
@@ -616,7 +648,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(inventory)
         return Response(serializer.data)
 
-    def partial_update(self, request, pk=None):
+    def partial_update(self, request, pk=None, authentication_classes=[TokenAuthentication]):
         data = request.data
         cost = data['cost']
         tank_number = data['tank_number']
@@ -638,7 +670,37 @@ class InventoryViewSet(viewsets.ModelViewSet):
 class InvoiceItemViewSet(viewsets.ModelViewSet):
     queryset = InvoiceItem.objects.all()
     serializer_class = InvoiceItemSerializer
-    # permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+
+    @action(detail=True, methods=['get'])
+    def get_sales_for_animal(self, request, pk=None):
+        parent = Animal.objects.get(id=pk)
+        children_ids = Animal.objects.filter(Q(father=parent) | Q(
+            mother=parent)).values_list('pk', flat=True)
+        inventory_ids = Inventory.objects.filter(Q(father=parent) | Q(
+            mother=parent)).values_list('pk', flat=True)
+        livestock_items = InvoiceItem.objects.filter(
+            animal__in=list(children_ids))
+        inventory_items = InvoiceItem.objects.filter(
+            inventory__in=list(inventory_ids))
+        livestock_serializer = self.get_serializer(livestock_items, many=True)
+        inventory_serializer = self.get_serializer(inventory_items, many=True)
+
+        def paid(item):
+            if item['sale']['status'] == 'PAID':
+                return item
+
+        offspring = filter(paid, livestock_serializer.data)
+        inventory = filter(paid, inventory_serializer.data)
+        bar_data = [livestock_serializer.data, inventory_serializer.data]
+
+        sales = {
+            "offspring": offspring,
+            "inventory": inventory,
+            "bar_data": bar_data
+        }
+
+        return Response(sales)
 
 
 class SaleViewSet(viewsets.ModelViewSet):
@@ -811,10 +873,10 @@ class SaleViewSet(viewsets.ModelViewSet):
             'request': request})
         params = {'invoice': serializer.data,
                   'company': company_serializer.data}
-        pdf = Util.create_invoice_file(params, False)
-        email_body = 'Your invoice is below.'+pdf
+        html = Util.create_invoice_file(params, False)
+        email_body = 'Your invoice is below.'
         email_data = {'email_body': email_body, 'to_email': [email],
-                      'email_subject': 'You have been sent an invoice via Livestock Manager'}
+                      'email_subject': 'You have been sent an invoice via Livestock Manager', 'html': html}
         Util.send_email(email_data)
 
         return Response(serializer.data)
@@ -909,7 +971,8 @@ class TaskViewset(viewsets.ModelViewSet):
             cost = data['cost']
             expense_per = round(cost / len(animals), 2)
             for a in animals:
-                Expense.objects.create(cost=expense_per, animal=a)
+                Expense.objects.create(
+                    cost=expense_per, animal=a, task_type=category)
             task = Task(
                 title=title,
                 category=category,

@@ -65,6 +65,26 @@ class TodoRemoveSerializer2(serializers.HyperlinkedModelSerializer):
         ]
 
 
+class TodoRemoveSerializer3(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = Sale
+        fields = [
+            'id',
+            'number',
+            'due_date',
+            'issue_date',
+            'title',
+            'bill_to_name',
+            'bill_to_address',
+            'email',
+            'status',
+            'phone',
+            'company',
+            'items',
+            'total'
+        ]
+
+
 class ExpenseSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
@@ -72,7 +92,8 @@ class ExpenseSerializer(serializers.HyperlinkedModelSerializer):
         fields = [
             'id',
             'cost',
-            'animal'
+            'animal',
+            'task_type'
         ]
 
 
@@ -138,6 +159,7 @@ class InventorySerializer(serializers.HyperlinkedModelSerializer):
 class InvoiceItemSerializer(serializers.HyperlinkedModelSerializer):
     inventory = InventorySerializer()
     animal = AnimalSerializer()
+    sale = TodoRemoveSerializer3()
 
     class Meta:
         model = InvoiceItem

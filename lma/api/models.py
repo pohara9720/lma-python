@@ -105,6 +105,7 @@ class Expense(models.Model):
     animal = models.ForeignKey(
         Animal, related_name='expenses', default='', on_delete=models.CASCADE
     )
+    task_type = models.CharField(max_length=50, default='')
 
 
 class BreedingSet(models.Model):

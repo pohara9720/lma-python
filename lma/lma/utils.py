@@ -14,6 +14,7 @@ from api.models import (
     InvoiceItem,
     Sale
 )
+
 from django.core.mail import EmailMessage, send_mail
 import boto3
 from django.conf import settings
@@ -32,6 +33,7 @@ from reportlab.lib import colors
 from datetime import date, timedelta
 import calendar
 from smtplib import SMTPException
+import csv
 from django.template.loader import get_template
 import xhtml2pdf.pisa as pisa
 from xhtml2pdf.config.httpconfig import httpConfig
@@ -356,3 +358,11 @@ class Util:
                 return html
         else:
             return HttpResponse("Error Rendering PDF", status=400)
+
+    @staticmethod
+    def csv_data(csv_file, fieldnames):
+        csv_data = io.TextIOWrapper(
+            csv_file, encoding='ascii', errors='replace')
+        reader = csv.DictReader(csv_data, fieldnames=fieldnames, delimiter=';')
+        next(reader)
+        return reader
