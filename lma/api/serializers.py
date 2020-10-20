@@ -123,7 +123,8 @@ class AnimalSerializer(serializers.HyperlinkedModelSerializer):
             'sire',
             'dam',
             'father_placeholder',
-            'mother_placeholder'
+            'mother_placeholder',
+            'sold'
         ]
 
     def get_fields(self):

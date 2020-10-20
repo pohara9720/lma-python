@@ -71,6 +71,7 @@ class Animal(models.Model):
     father_placeholder = models.CharField(max_length=50, null=True)
     mother_placeholder = models.CharField(max_length=50, null=True)
     attachment = models.CharField(max_length=150, null=True)
+    sold = models.BooleanField(default=False)
     # Relationships
     company = models.ForeignKey(
         Company, related_name='animals', default='', on_delete=models.CASCADE
