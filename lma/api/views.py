@@ -17,6 +17,8 @@ from django.db.models import F, Q
 import datetime
 from json import loads, dumps
 from django.http import HttpResponseServerError
+import secrets
+import string
 
 from .models import (
     User,
@@ -66,6 +68,23 @@ class UserViewSet(viewsets.ModelViewSet):
         try:
             sub = Stripe.retrieve_subscription(pk)
             return Response(sub)
+        except Exception as e:
+            return HttpResponseServerError(e)
+
+    @action(detail=False, methods=['post'])
+    def forgot_password(self, request, pk=None):
+        try:
+            email = request.data['email']
+            alphabet = string.ascii_letters + string.digits
+            temp_password = ''.join(secrets.choice(alphabet)
+                                    for i in range(20))
+            user = User.objects.get(email=email)
+            user.set_password(temp_password)
+            user.save()
+            email_body = 'Hello please use this temporary password to login. You may change it in your profile secion once authenticated'+temp_password
+            email_data = {'email_body': email_body, 'to_email': [email],
+                          'email_subject': 'Temporary Password Request'}
+            Util.send_email(email_data)
         except Exception as e:
             return HttpResponseServerError(e)
 
