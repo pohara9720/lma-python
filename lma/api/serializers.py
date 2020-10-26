@@ -231,6 +231,7 @@ class TaskSerializer(serializers.HyperlinkedModelSerializer):
             'completed',
             'users',
             'animals',
+            'cost',
             # 'expenses',
             'breeding_sets',
             'company'

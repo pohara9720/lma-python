@@ -81,10 +81,11 @@ class UserViewSet(viewsets.ModelViewSet):
             user = User.objects.get(email=email)
             user.set_password(temp_password)
             user.save()
-            email_body = 'Hello please use this temporary password to login. You may change it in your profile secion once authenticated'+temp_password
+            email_body = 'Hello please use this temporary password to login. You may change it in your profile secion once authenticated '+temp_password
             email_data = {'email_body': email_body, 'to_email': [email],
                           'email_subject': 'Temporary Password Request'}
             Util.send_email(email_data)
+            return Response({'status': 200})
         except Exception as e:
             return HttpResponseServerError(e)
 
@@ -370,7 +371,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
     def get_pdf(self, request):
         try:
             table_data = Util.get_pdf_data(request, 'animal')
-            pdf = Util.export_pdf(request, 'animals.pdf', table_data)
+            pdf = Util.export_pdf(request, 'animals.csv', table_data)
             return pdf
         except Exception as e:
             return HttpResponseServerError(e)
@@ -382,18 +383,45 @@ class AnimalViewSet(viewsets.ModelViewSet):
             company_id = user['company']['id']
             company = Company.objects.get(id=company_id)
             animals = []
-            fieldnames = ['Username', 'Identifier',
-                          'First name', 'Last name']
+            fieldnames = ['Name', 'Type',
+                          'Sub-type', 'Tag Number', 'Registration Number', 'DOB', 'Father ID', 'Mother ID', 'Father Name', 'Mother Name']
             csv_file = request.data['csv']
             rows = Util.csv_data(csv_file, fieldnames)
             for row in rows:
                 o = loads(dumps(row))
+                father_placeholder = o.get('Father Name')
+                mother_placeholder = o.get('Mother Name')
+                f_id = o.get('Father ID')
+                m_id = o.get('Mother ID')
+                try:
+                    father = Animal.objects.get(id=f_id)
+                except Animal.DoesNotExist:
+                    father = None
+                try:
+                    mother = Animal.objects.get(id=m_id)
+                except Animal.DoesNotExist:
+                    mother = None
+
                 animal = Animal(
-                    company=company
+                    company=company,
+                    name=o['Name'],
+                    type=o['Type'],
+                    sub_type=o['Sub-type'],
+                    tag_number=o['Tag Number'],
+                    registration_number=o['Registration Number'],
+                    dob=o['DOB'],
+                    father=father,
+                    mother=mother,
+                    father_placeholder=father_placeholder,
+                    mother_placeholder=mother_placeholder,
                 )
                 animals.append(animal)
-            # Animal.objects.bulk_create(animals)
+                print('ANIMALS', animals)
+            results = Animal.objects.bulk_create(animals)
+            serializer = self.get_serializer(results, many=True)
+            return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -608,20 +636,40 @@ class AnimalViewSet(viewsets.ModelViewSet):
             breed = data.get('breed')
             name = data['name']
             attachment_file = data.get('attachment')
+            header_img = data.get('header_image')
+            profile_img = data.get('profile_image')
+            if profile_img is None:
+                profile_image = None
+            elif type(profile_img) is str:
+                profile_image = profile_img
+            else:
+                profile_image = Util.upload_file(profile_img)
+
+            if header_img is None:
+                header_image = None
+            elif type(header_img) is str:
+                header_image = header_img
+            else:
+                header_image = Util.upload_file(header_img)
+
             attachment = None if attachment_file == None else Util.upload_file(
                 attachment_file)
+
             Animal.objects.filter(id=pk).update(
                 sub_type=sub_type,
                 tag_number=tag_number,
                 registration_number=registration_number,
                 breed=breed,
                 name=name,
-                attachment=attachment
+                attachment=attachment,
+                profile_image=profile_image,
+                header_image=header_image
             )
             updated = Animal.objects.get(id=pk)
             serializer = self.get_serializer(updated)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
 
@@ -634,7 +682,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
     def get_pdf(self, request):
         try:
             table_data = Util.get_pdf_data(request, 'inventory')
-            pdf = Util.export_pdf(request, 'inventory.pdf', table_data)
+            pdf = Util.export_pdf(request, 'inventory.csv', table_data)
             return pdf
         except Exception as e:
             return HttpResponseServerError(e)
@@ -645,7 +693,43 @@ class InventoryViewSet(viewsets.ModelViewSet):
             user = Util.authenticate(request, False)
             company_id = user['company']['id']
             company = Company.objects.get(id=company_id)
+            inventory = []
+            fieldnames = ['Category', 'Cost',
+                          'Tank Number', 'Canister Number', 'Top ID', 'Father ID', 'Mother ID', 'Units', 'Animal Category']
+            csv_file = request.data['csv']
+            rows = Util.csv_data(csv_file, fieldnames)
+            for row in rows:
+                o = loads(dumps(row))
+                print(o)
+                f_id = o.get('Father ID')
+                m_id = o.get('Mother ID')
+                try:
+                    father = Animal.objects.get(id=f_id)
+                except Animal.DoesNotExist:
+                    father = None
+                try:
+                    mother = Animal.objects.get(id=m_id)
+                except Animal.DoesNotExist:
+                    mother = None
+                item = Inventory(
+                    company=company,
+                    category=o['Category'],
+                    cost=o['Cost'],
+                    tank_number=o['Tank Number'],
+                    canister_number=o['Canister Number'],
+                    top_id=o['Top ID'],
+                    father=father,
+                    mother=mother,
+                    units=o['Units'],
+                    animal_category=o['Animal Category']
+                )
+                inventory.append(item)
+            results = Inventory.objects.bulk_create(inventory)
+            print('RESULTS', results)
+            serializer = self.get_serializer(results, many=True)
+            return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -841,7 +925,7 @@ class SaleViewSet(viewsets.ModelViewSet):
     def get_pdf(self, request):
         try:
             table_data = Util.get_pdf_data(request, 'sale')
-            pdf = Util.export_pdf(request, 'sales.pdf', table_data)
+            pdf = Util.export_pdf(request, 'sales.csv', table_data)
             return pdf
         except Exception as e:
             return HttpResponseServerError(e)
@@ -1057,9 +1141,16 @@ class TaskViewset(viewsets.ModelViewSet):
                         inventory = Inventory.objects.get(id=semen.id)
                         inventory.units = inventory.units - 1
                         inventory.save()
+            else:
+                animals = task.animals.all()
+                expense_per = round(task.cost / len(animals), 2)
+                for a in animals:
+                    Expense.objects.create(
+                        cost=expense_per, animal=a, task_type=task.category)
             serializer = self.get_serializer(task)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def list(self, request):
@@ -1103,7 +1194,6 @@ class TaskViewset(viewsets.ModelViewSet):
                             female=female,
                             animal_semen=animal
                         )
-
                         set.save()
                         breeding_sets.append(set)
                     else:
@@ -1129,18 +1219,15 @@ class TaskViewset(viewsets.ModelViewSet):
                 serializer = self.get_serializer(task)
                 return Response(serializer.data)
             else:
-                animals = Animal.objects.filter(id__in=data['animals'])
                 cost = data['cost']
-                expense_per = round(cost / len(animals), 2)
-                for a in animals:
-                    Expense.objects.create(
-                        cost=expense_per, animal=a, task_type=category)
+                animals = Animal.objects.filter(id__in=data['animals'])
                 task = Task(
                     title=title,
                     category=category,
                     task_due_date=task_due_date,
                     description=description,
                     company=company,
+                    cost=cost,
                     completed=False
                 )
                 task.save()
@@ -1149,4 +1236,74 @@ class TaskViewset(viewsets.ModelViewSet):
                 serializer = self.get_serializer(task)
                 return Response(serializer.data)
         except Exception as e:
+            return HttpResponseServerError(e)
+
+    def partial_update(self, request, pk=None):
+        try:
+            data = request.data
+            category = data['category']
+            title = data['title']
+            task_due_date = data['task_due_date']
+            description = data['description']
+            users = User.objects.filter(id__in=data['users'])
+            if category == 'BREEDING':
+                breeding_sets = []
+                due_date = data['due_date']
+                breeding = data['breeding']
+                for selection in breeding:
+                    semen = selection['breeding_selection']
+                    female_id = selection['female_select']
+                    female = Animal.objects.get(id=female_id)
+                    if semen['type'] == 'animal':
+                        animal = Animal.objects.get(id=semen['id'])
+                        set = BreedingSet(
+                            female=female,
+                            animal_semen=animal
+                        )
+                        set.save()
+                        breeding_sets.append(set)
+                    else:
+                        inventory = Inventory.objects.get(id=semen['id'])
+                        set = BreedingSet(
+                            female=female,
+                            inventory_semen=inventory
+                        )
+                        set.save()
+                        breeding_sets.append(set)
+                Task.objects.filter(id=pk).update(
+                    title=title,
+                    category=category,
+                    task_due_date=task_due_date,
+                    description=description,
+                    due_date=due_date
+                )
+                task = Task.objects.get(id=pk)
+                task.users.clear()
+                task.breeding_sets.clear()
+                task.save()
+                task.users.set(users)
+                task.breeding_sets.set(breeding_sets)
+                serializer = self.get_serializer(task)
+                return Response(serializer.data)
+            else:
+                cost = data['cost']
+                animals = Animal.objects.filter(id__in=data['animals'])
+                Task.objects.filter(id=pk).update(
+                    title=title,
+                    category=category,
+                    task_due_date=task_due_date,
+                    description=description,
+                    cost=cost
+                )
+                task = Task.objects.get(id=pk)
+                task.users.clear()
+                task.animals.clear()
+                task.save()
+                task.users.set(users)
+                task.animals.set(animals)
+                serializer = self.get_serializer(task)
+                return Response(serializer.data)
+
+        except Exception as e:
+            print(e)
             return HttpResponseServerError(e)

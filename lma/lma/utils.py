@@ -321,21 +321,12 @@ class Util:
 
     @staticmethod
     def export_pdf(request, filename, data):
-        style = [
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-        ]
-        buffer = io.BytesIO()
-        pdf = SimpleDocTemplate(buffer, pagesize=landscape(letter))
-        table = Table(data, style=style)
-        pdf.build([table])
-        pdf_value = buffer.getvalue()
-        buffer.close()
-        response = HttpResponse(content_type='application/pdf')
+        response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = Template(
             'attachment; filename="$filename"').substitute(filename=filename)
-        response.write(pdf_value)
+        writer = csv.writer(response)
+        for row in data:
+            writer.writerow(row)
         return response
 
     @staticmethod
@@ -363,6 +354,6 @@ class Util:
     def csv_data(csv_file, fieldnames):
         csv_data = io.TextIOWrapper(
             csv_file, encoding='ascii', errors='replace')
-        reader = csv.DictReader(csv_data, fieldnames=fieldnames, delimiter=';')
+        reader = csv.DictReader(csv_data, fieldnames=fieldnames, delimiter=',')
         next(reader)
         return reader
