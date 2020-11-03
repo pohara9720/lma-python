@@ -29,6 +29,7 @@ router.register(r'invoiceitem', views.InvoiceItemViewSet, 'invoiceitem')
 router.register(r'sale', views.SaleViewSet, 'sale')
 router.register(r'task', views.TaskViewset, 'task')
 router.register(r'breedingset', views.BreedingSetViewSet, 'breedingset')
+router.register(r'transfer', views.TransferViewSet, 'transfer')
 # router.register(r'register', views.RegisterView.as_view(), basename='register')
 
 # Wire up our API using automatic URL routing.

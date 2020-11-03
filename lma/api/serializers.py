@@ -9,7 +9,8 @@ from .models import (
     InvoiceItem,
     Sale,
     Expense,
-    BreedingSet
+    BreedingSet,
+    Transfer
 )
 
 
@@ -42,9 +43,8 @@ class TodoRemoveSerializer(serializers.HyperlinkedModelSerializer):
             'address',
             'is_active',
             'company',
+            'deleted'
         ]
-
-# TODO DONT DO THIS!!!
 
 
 class TodoRemoveSerializer2(serializers.HyperlinkedModelSerializer):
@@ -62,6 +62,7 @@ class TodoRemoveSerializer2(serializers.HyperlinkedModelSerializer):
             'address',
             'is_active',
             'company',
+            'deleted'
         ]
 
 
@@ -81,7 +82,8 @@ class TodoRemoveSerializer3(serializers.HyperlinkedModelSerializer):
             'phone',
             'company',
             'items',
-            'total'
+            'total',
+            'deleted'
         ]
 
 
@@ -124,7 +126,7 @@ class AnimalSerializer(serializers.HyperlinkedModelSerializer):
             'dam',
             'father_placeholder',
             'mother_placeholder',
-            'sold'
+            'deleted'
         ]
 
     def get_fields(self):
@@ -153,7 +155,8 @@ class InventorySerializer(serializers.HyperlinkedModelSerializer):
             'company',
             'invoice_items',
             'animal_category',
-            'bred_with'
+            'bred_with',
+            'deleted'
         ]
 
 
@@ -210,7 +213,23 @@ class SaleSerializer(serializers.HyperlinkedModelSerializer):
             'phone',
             'company',
             'items',
-            'total'
+            'total',
+            'deleted'
+        ]
+
+
+class TransferSerializer(serializers.HyperlinkedModelSerializer):
+    sale = SaleSerializer()
+
+    class Meta:
+        model = Transfer
+        fields = [
+            'id',
+            'sale',
+            'accepted',
+            'transferred',
+            'email',
+            'created_by'
         ]
 
 
@@ -232,7 +251,7 @@ class TaskSerializer(serializers.HyperlinkedModelSerializer):
             'users',
             'animals',
             'cost',
-            # 'expenses',
+            'deleted',
             'breeding_sets',
             'company'
         ]
@@ -280,4 +299,5 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
             'address',
             'is_active',
             'company',
+            'deleted'
         ]

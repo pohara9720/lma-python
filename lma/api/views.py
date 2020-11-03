@@ -30,7 +30,8 @@ from .models import (
     InvoiceItem,
     Sale,
     Expense,
-    BreedingSet
+    BreedingSet,
+    Transfer
 )
 from .serializers import (
     UserSerializer,
@@ -42,7 +43,8 @@ from .serializers import (
     SaleSerializer,
     TaskSerializer,
     ExpenseSerializer,
-    BreedingSetSerializer
+    BreedingSetSerializer,
+    TransferSerializer
 )
 
 
@@ -60,8 +62,6 @@ class VerifyEmail(APIView):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    # permission_classes = [IsAuthenticated]
-    # authentication_classes = [TokenAuthentication]
 
     @action(detail=True, methods=['get'], authentication_classes=[TokenAuthentication])
     def retrieve_subscription(self, request, pk=None):
@@ -69,6 +69,7 @@ class UserViewSet(viewsets.ModelViewSet):
             sub = Stripe.retrieve_subscription(pk)
             return Response(sub)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'])
@@ -81,12 +82,13 @@ class UserViewSet(viewsets.ModelViewSet):
             user = User.objects.get(email=email)
             user.set_password(temp_password)
             user.save()
-            email_body = 'Hello please use this temporary password to login. You may change it in your profile secion once authenticated '+temp_password
+            email_body = 'Hello please use this temporary password to login. You may change it in your profile secion once authenticated ' + temp_password
             email_data = {'email_body': email_body, 'to_email': [email],
                           'email_subject': 'Temporary Password Request'}
             Util.send_email(email_data)
             return Response({'status': 200})
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -99,6 +101,7 @@ class UserViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(user)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -107,6 +110,7 @@ class UserViewSet(viewsets.ModelViewSet):
             user = Util.authenticate(request, False)
             return Response(user)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -117,14 +121,19 @@ class UserViewSet(viewsets.ModelViewSet):
             updated = Stripe.update_subscription(sub_id, price_id)
             return Response(updated)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=True, methods=['post'])
     def register(self, request, pk=None):
+        email = request.data['email']
+        try:
+            transfer = Transfer.objects.get(email=email)
+        except Transfer.DoesNotExist:
+            transfer = None
         try:
             first_name = request.data['first_name']
             last_name = request.data['last_name']
-            email = request.data['email']
             role = 'ADMIN'
             password = request.data['password']
             user_address = Util.save_address(
@@ -141,6 +150,31 @@ class UserViewSet(viewsets.ModelViewSet):
             )
             user.set_password(password)
             user.save()
+            if transfer is not None and transfer.accepted:
+                items = InvoiceItem.objects.filter(sale=transfer.sale)
+                for item in items:
+                    animal = item.animal
+                    inventory = item.inventory
+                    if animal is not None:
+                        animal.company = company
+                        animal.save()
+                    if inventory is not None:
+                        u = inventory.units
+                        q = item.quantity
+                        is_all = u - q <= 0
+                        if is_all:
+                            inventory.company = company
+                            inventory.save()
+                        else:
+                            copy = Inventory.objects.get(id=inventory.id)
+                            copy.id = None
+                            copy.company = company
+                            copy.units = item.quantity
+                            inventory.units = inventory.units - item.quantity
+                            copy.save()
+                            inventory.save()
+                transfer.transferred = True
+                transfer.save()
             serializer = UserSerializer(instance=user, context={
                 'request': request})
             token = Token.objects.create(user=user).key
@@ -152,6 +186,7 @@ class UserViewSet(viewsets.ModelViewSet):
             Util.send_email(email_data)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'])
@@ -177,6 +212,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 Util.send_email(email_data)
                 return Response('Email Sent')
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -188,9 +224,9 @@ class UserViewSet(viewsets.ModelViewSet):
             value = request.data['value']
             users = User.objects.filter(
                 Q(
-                    first_name__icontains=value, company=company
+                    first_name__icontains=value, company=company, deleted=False
                 ) | Q(
-                    last_name__icontains=value, company=company
+                    last_name__icontains=value, company=company, deleted=False
                 )
             )
             page = self.paginate_queryset(users)
@@ -201,6 +237,30 @@ class UserViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(users, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
+    @action(detail=True, methods=['post'], authentication_classes=[TokenAuthentication])
+    def delete_single(self, request, pk=None):
+        try:
+            user = User.objects.get(id=pk)
+            user.deleted = True
+            user.save()
+            return Response({"status": 200})
+        except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def batch_delete(self, request, pk=None):
+        try:
+            users = request.data['users']
+            for user in User.objects.filter(id__in=users):
+                user.deleted = True
+                user.save()
+            return Response({"status": 200})
+        except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def create(self, request, authentication_classes=[TokenAuthentication]):
@@ -226,6 +286,7 @@ class UserViewSet(viewsets.ModelViewSet):
             Util.send_email(email_data)
             return Response(users)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def list(self, request, authentication_classes=[TokenAuthentication]):
@@ -233,14 +294,15 @@ class UserViewSet(viewsets.ModelViewSet):
             user = Util.authenticate(request, False)
             company_id = user['company']['id']
             company = Company.objects.get(id=company_id)
-            serializer = CompanySerializer(instance=company, context={
-                'request': request})
+            users = User.objects.filter(company=company, deleted=False)
+            serializer = self.get_serializer(users, many=True)
             page = self.paginate_queryset(serializer.data['users'])
             if page is not None:
                 return self.get_paginated_response(page)
             else:
                 return Response(serializer.data['users'])
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def partial_update(self, request, pk=None, authentication_classes=[TokenAuthentication]):
@@ -265,6 +327,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 first_name=first_name, last_name=last_name, address=address)
             return Response(updated)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
 
@@ -304,6 +367,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
                         })
             return Response(results)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=True, methods=['get'], authentication_classes=[TokenAuthentication])
@@ -314,6 +378,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 data = Stripe.retrieve_account(pk)
                 return Response(data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=True, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -324,6 +389,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 data = Stripe.update_account(request, pk)
                 return Response(data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def partial_update(self, request, pk=None, authentication_classes=[TokenAuthentication]):
@@ -347,6 +413,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
             else:
                 return Response('Unauthorized')
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
 
@@ -359,7 +426,107 @@ class AddressViewSet(viewsets.ModelViewSet):
 class BreedingSetViewSet(viewsets.ModelViewSet):
     queryset = BreedingSet.objects.all()
     serializer_class = BreedingSetSerializer
-    # permission_classes = [IsAuthenticated]
+
+
+class TransferViewSet(viewsets.ModelViewSet):
+    queryset = Transfer.objects.all()
+    serializer_class = TransferSerializer
+
+    @action(detail=False, methods=['post'])
+    def check_for_transfer(self, request, pk=None):
+        email = request.data['email']
+        try:
+            transfer = Transfer.objects.filter(
+                email=email, accepted=False, transferred=False).first()
+        except Transfer.DoesNotExist:
+            transfer = None
+        if transfer is not None:
+            serializer = self.get_serializer(transfer)
+            return Response(serializer.data)
+        else:
+            return Response(transfer)
+
+    @action(detail=True, methods=['post'])
+    def retrieve_transfer(self, request, pk=None):
+        try:
+            transfer = Transfer.objects.get(id=pk)
+            if transfer.accepted or transfer.transferred:
+                return Response(None)
+            else:
+                serializer = self.get_serializer(transfer)
+                return Response(serializer.data)
+        except Transfer.DoesNotExist:
+            return Response(None)
+        except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
+    @action(detail=False, methods=['post'])
+    def accept(self, request, pk=None):
+        try:
+            transfer_id = request.data['id']
+            transfer = Transfer.objects.get(id=transfer_id)
+            transfer.accepted = True
+            try:
+                company = Company.objects.get(email=transfer.email)
+            except Company.DoesNotExist:
+                company = None
+            if company is not None:
+                items = InvoiceItem.objects.filter(sale=transfer.sale)
+                for item in items:
+                    animal = item.animal
+                    inventory = item.inventory
+                    if animal is not None:
+                        animal.company = company
+                        animal.save()
+                    if inventory is not None:
+                        u = inventory.units
+                        q = item.quantity
+                        is_all = u - q <= 0
+                        if is_all:
+                            inventory.company = company
+                            inventory.save()
+                        else:
+                            copy = Inventory.objects.get(id=inventory.id)
+                            copy.id = None
+                            copy.company = company
+                            copy.units = item.quantity
+                            inventory.units = inventory.units - item.quantity
+                            copy.save()
+                            inventory.save()
+                transfer.transferred = True
+            transfer.save()
+            email_body = 'Your invoice sent to ' + \
+                transfer.email+' has been accepted.'
+            email_data = {
+                'email_body': email_body,
+                'to_email': [transfer.email],
+                'email_subject': 'Your invoice has been accepted'
+            }
+            Util.send_email(email_data)
+            return Response({"status": 200})
+        except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
+    @action(detail=False, methods=['post'])
+    def deny(self, request, pk=None):
+        try:
+            transfer_id = request.data['id']
+            transfer = Transfer.objects.get(id=transfer_id)
+            email_body = 'Your invoice sent to ' + \
+                transfer.email+' has been denied and removed.'
+            email_data = {
+                'email_body': email_body,
+                'to_email': [transfer.email],
+                'email_subject': 'Your invoice has been denied'
+            }
+            Util.send_email(email_data)
+            transfer.sale.delete()
+            return Response({"status": 200})
+        except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
 
 
 class AnimalViewSet(viewsets.ModelViewSet):
@@ -374,6 +541,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
             pdf = Util.export_pdf(request, 'animals.csv', table_data)
             return pdf
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -436,6 +604,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(animal)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -446,8 +615,8 @@ class AnimalViewSet(viewsets.ModelViewSet):
             company = Company.objects.get(id=company_id)
             value = request.data['value']
             animals = Animal.objects.filter(
-                Q(name__icontains=value, company=company, sold=False) | Q(
-                    tag_number__icontains=value, company=company, sold=False)
+                Q(name__icontains=value, company=company, deleted=False) | Q(
+                    tag_number__icontains=value, company=company, deleted=False)
             )
             page = self.paginate_queryset(animals)
             if page is not None:
@@ -457,6 +626,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(animals, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=True, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -482,12 +652,13 @@ class AnimalViewSet(viewsets.ModelViewSet):
             else:
                 return Response([])
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=True, methods=['get'], authentication_classes=[TokenAuthentication])
     def by_type(self, request, pk=None):
         try:
-            animals = Animal.objects.filter(type=pk, sold=False)
+            animals = Animal.objects.filter(type=pk, deleted=False)
             page = self.paginate_queryset(animals)
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
@@ -496,6 +667,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(animals, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=True, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -507,6 +679,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
                 'request': request}, many=True)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -514,13 +687,14 @@ class AnimalViewSet(viewsets.ModelViewSet):
         try:
             user = Util.authenticate(request, False)
             company_id = user['company']['id']
-            type = request.data['type']
+            a_type = request.data['type']
             males = ['BULL', 'STEER', 'WETHER', 'RAM',
                      'STUD', 'GELDING', 'BOAR', 'BARROW', 'BUCK']
             sires = []
             dams = []
             if type == 'N/A':
-                animals = Animal.objects.filter(company=company_id)
+                animals = Animal.objects.filter(
+                    company=company_id, deleted=False)
                 serializer = self.get_serializer(animals, many=True)
                 for animal in serializer.data:
                     if animal['sub_type'] in males:
@@ -529,7 +703,8 @@ class AnimalViewSet(viewsets.ModelViewSet):
                         dams.append(animal)
                 return Response({"father": sires, "mother": dams})
             else:
-                animals = Animal.objects.filter(company=company_id, type=type)
+                animals = Animal.objects.filter(
+                    company=company_id, type=a_type, deleted=False)
                 serializer = self.get_serializer(animals, many=True)
                 for animal in serializer.data:
                     if animal['sub_type'] in males:
@@ -538,6 +713,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
                         dams.append(animal)
                 return Response({"father": sires, "mother": dams})
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -561,13 +737,26 @@ class AnimalViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(children, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def batch_delete(self, request, pk=None):
+        try:
+            animals = request.data['animals']
+            for animal in Animal.objects.filter(id__in=animals):
+                animal.deleted = True
+                animal.save()
+            return Response({"status": 200})
+        except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def list(self, request, authentication_classes=[TokenAuthentication]):
         try:
             user = Util.authenticate(request, False)
             company_id = user['company']['id']
-            animals = Animal.objects.filter(company=company_id, sold=False)
+            animals = Animal.objects.filter(company=company_id, deleted=False)
             page = self.paginate_queryset(animals)
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
@@ -576,6 +765,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(animals, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def create(self, request, authentication_classes=[TokenAuthentication]):
@@ -617,6 +807,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(new_animal)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def retrieve(self, request, pk=None, authentication_classes=[TokenAuthentication]):
@@ -625,6 +816,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(animal)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def partial_update(self, request, pk=None, authentication_classes=[TokenAuthentication]):
@@ -685,6 +877,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
             pdf = Util.export_pdf(request, 'inventory.csv', table_data)
             return pdf
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -740,8 +933,8 @@ class InventoryViewSet(viewsets.ModelViewSet):
             company = Company.objects.get(id=company_id)
             value = request.data['value']
             inventory = Inventory.objects.filter(
-                Q(top_id__icontains=value, company=company) | Q(
-                    tank_number__icontains=value, company=company)
+                Q(top_id__icontains=value, company=company, deleted=False) | Q(
+                    tank_number__icontains=value, company=company, deleted=False)
             )
             page = self.paginate_queryset(inventory)
             if page is not None:
@@ -751,12 +944,13 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(inventory, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=True, methods=['get'], authentication_classes=[TokenAuthentication])
     def by_type(self, request, pk=None):
         try:
-            inventory = Inventory.objects.filter(category=pk)
+            inventory = Inventory.objects.filter(category=pk, deleted=False)
             serializer = self.get_serializer(inventory, many=True)
             page = self.paginate_queryset(inventory)
             if page is not None:
@@ -766,6 +960,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(inventory, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
@@ -776,10 +971,10 @@ class InventoryViewSet(viewsets.ModelViewSet):
             company = Company.objects.get(id=company_id)
             animal_category = request.data['type']
             inventory = Inventory.objects.filter(
-                company=company, animal_category=animal_category, category='SEMEN'
+                company=company, animal_category=animal_category, category='SEMEN', deleted=False
             )
             animals = Animal.objects.filter(
-                company=company, type=animal_category)
+                company=company, type=animal_category, deleted=False)
             animal_serializer = AnimalSerializer(instance=animals, context={
                 'request': request}, many=True)
             inventory_serializer = self.get_serializer(inventory, many=True)
@@ -798,6 +993,19 @@ class InventoryViewSet(viewsets.ModelViewSet):
             }
             return Response(response)
         except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def batch_delete(self, request, pk=None):
+        try:
+            inventory = request.data['inventory']
+            for inv in Inventory.objects.filter(id__in=inventory):
+                inv.deleted = True
+                inv.save()
+            return Response({"status": 200})
+        except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def list(self, request, authentication_classes=[TokenAuthentication]):
@@ -805,7 +1013,8 @@ class InventoryViewSet(viewsets.ModelViewSet):
             user = Util.authenticate(request, False)
             company_id = user['company']['id']
             company = Company.objects.get(id=company_id)
-            inventory = Inventory.objects.filter(company=company)
+            inventory = Inventory.objects.filter(
+                company=company, deleted=False)
             page = self.paginate_queryset(inventory)
 
             if page is not None:
@@ -815,6 +1024,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(inventory, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def create(self, request, pk=None, authentication_classes=[TokenAuthentication]):
@@ -851,6 +1061,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(inventory)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def partial_update(self, request, pk=None, authentication_classes=[TokenAuthentication]):
@@ -872,6 +1083,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(inventory)
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
 
@@ -913,6 +1125,7 @@ class InvoiceItemViewSet(viewsets.ModelViewSet):
 
             return Response(sales)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
 
@@ -928,12 +1141,13 @@ class SaleViewSet(viewsets.ModelViewSet):
             pdf = Util.export_pdf(request, 'sales.csv', table_data)
             return pdf
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=True, methods=['get'])
     def by_type(self, request, pk=None):
         try:
-            sales = Sale.objects.filter(status=pk)
+            sales = Sale.objects.filter(status=pk, deleted=False)
             page = self.paginate_queryset(sales)
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
@@ -942,6 +1156,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(sales, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=True, methods=['get'])
@@ -959,29 +1174,17 @@ class SaleViewSet(viewsets.ModelViewSet):
             pdf = Util.create_invoice_file(params, True)
             return pdf
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'])
     def change_to_paid(self, request):
         try:
             invoices = request.data['invoices']
-            for invoice in invoices:
-                sale = Sale.objects.get(id=invoice['id'])
-                items = InvoiceItem.objects.filter(sale=sale)
-                for item in items:
-                    if item.type == 'LIVESTOCK':
-                        animal = item.animal
-                        animal.sold = True
-                        animal.save()
-                    else:
-                        inventory = item.inventory
-                        inventory.units = 0 if inventory.units - \
-                            item.quantity < 0 else inventory.units - item.quantity
-                        inventory.save()
-                sale.status = 'PAID'
-                sale.save()
+            Sale.objects.filter(id__in=invoices).update(status='PAID')
             return Response({'status': 200})
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'])
@@ -1006,6 +1209,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                 Util.send_email(email_data)
             return Response('Email Sent')
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     @action(detail=False, methods=['post'])
@@ -1016,8 +1220,8 @@ class SaleViewSet(viewsets.ModelViewSet):
             company = Company.objects.get(id=company_id)
             value = request.data['value']
             sales = Sale.objects.filter(
-                Q(bill_to_name__icontains=value, company=company) | Q(
-                    number__icontains=value, company=company)
+                Q(bill_to_name__icontains=value, company=company, deleted=False) | Q(
+                    number__icontains=value, company=company, deleted=False)
             )
             page = self.paginate_queryset(sales)
             if page is not None:
@@ -1027,6 +1231,19 @@ class SaleViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(sales, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def batch_delete(self, request, pk=None):
+        try:
+            sales = request.data['sales']
+            for sale in Sale.objects.filter(id__in=sales):
+                sale.deleted = True
+                sale.save()
+            return Response({"status": 200})
+        except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def list(self, request):
@@ -1034,7 +1251,7 @@ class SaleViewSet(viewsets.ModelViewSet):
             user = Util.authenticate(request, False)
             company_id = user['company']['id']
             company = Company.objects.get(id=company_id)
-            sales = Sale.objects.filter(company=company)
+            sales = Sale.objects.filter(company=company, deleted=False)
             page = self.paginate_queryset(sales)
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
@@ -1043,6 +1260,7 @@ class SaleViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(sales, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def create(self, request):
@@ -1104,20 +1322,25 @@ class SaleViewSet(viewsets.ModelViewSet):
                         sale=sale
                     )
                     invoice_item.save()
-
+            transfer = Transfer(email=email, sale=sale,
+                                created_by=company.email)
+            transfer.save()
             serializer = self.get_serializer(sale)
             company_serializer = CompanySerializer(instance=company, context={
                 'request': request})
-            params = {'invoice': serializer.data,
-                      'company': company_serializer.data}
+            url = settings.REACT_DOMAIN+'transfer/'+str(transfer.id)
+            params = {
+                'invoice': serializer.data,
+                'company': company_serializer.data
+            }
             html = Util.create_invoice_file(params, False)
-            email_body = 'Your invoice is below.'
+            email_body = 'You have been sent an invoice via Livestock Manager. Accept or deny the transfer of items here '+url
             email_data = {'email_body': email_body, 'to_email': [email],
-                          'email_subject': 'You have been sent an invoice via Livestock Manager', 'html': html}
+                          'email_subject': email_body, 'html': html}
             Util.send_email(email_data)
-
             return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
 
@@ -1153,12 +1376,37 @@ class TaskViewset(viewsets.ModelViewSet):
             print(e)
             return HttpResponseServerError(e)
 
+    @action(detail=True, methods=['post'], authentication_classes=[TokenAuthentication])
+    def delete_single(self, request, pk=None):
+        try:
+            task = Task.objects.get(id=pk)
+            task.deleted = True
+            task.save()
+            return Response({"status": 200})
+        except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def batch_delete(self, request, pk=None):
+        try:
+            tasks = request.data['tasks']
+            for task in Task.objects.filter(id__in=tasks):
+                task.deleted = True
+                task.save()
+            return Response({"status": 200})
+        except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
     def list(self, request):
         try:
             user = Util.authenticate(request, False)
+            company_id = user['company']['id']
+            company = Company.objects.get(id=company_id)
             role = user['role']
             if role == 'ADMIN':
-                tasks = Task.objects.all()
+                tasks = Task.objects.filter(company=company, deleted=False)
                 serializer = self.get_serializer(tasks, many=True)
                 return Response(serializer.data)
             else:
@@ -1167,6 +1415,7 @@ class TaskViewset(viewsets.ModelViewSet):
                 serializer = self.get_serializer(tasks, many=True)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def create(self, request, pk=None):
@@ -1236,6 +1485,7 @@ class TaskViewset(viewsets.ModelViewSet):
                 serializer = self.get_serializer(task)
                 return Response(serializer.data)
         except Exception as e:
+            print(e)
             return HttpResponseServerError(e)
 
     def partial_update(self, request, pk=None):

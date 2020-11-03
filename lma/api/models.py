@@ -42,6 +42,7 @@ class User(AbstractBaseUser):
     # Relationships
     company = models.ForeignKey(
         Company, related_name='users', default='', on_delete=models.CASCADE, null=True)
+    deleted = models.BooleanField(default=False)
     # Joined
     # tasks = [Task]
     USERNAME_FIELD = 'email'
@@ -71,7 +72,7 @@ class Animal(models.Model):
     father_placeholder = models.CharField(max_length=50, null=True)
     mother_placeholder = models.CharField(max_length=50, null=True)
     attachment = models.CharField(max_length=150, null=True)
-    sold = models.BooleanField(default=False)
+    deleted = models.BooleanField(default=False)
     # Relationships
     company = models.ForeignKey(
         Company, related_name='animals', default='', on_delete=models.CASCADE
@@ -85,6 +86,7 @@ class Inventory(models.Model):
     tank_number = models.IntegerField()
     canister_number = models.IntegerField()
     top_id = models.IntegerField()
+    deleted = models.BooleanField(default=False)
     father = models.ForeignKey(
         Animal, related_name='father_of', default='', on_delete=models.CASCADE, null=True
     )
@@ -130,6 +132,7 @@ class Task(models.Model):
     due_date = models.DateField(null=True)
     description = models.TextField(max_length=500)
     completed = models.BooleanField()
+    deleted = models.BooleanField(default=False)
     # Relationships
     users = models.ManyToManyField(User)
     animals = models.ManyToManyField(Animal)
@@ -153,6 +156,7 @@ class Sale(models.Model):
     status = models.CharField(max_length=50)
     phone = models.IntegerField()
     total = models.IntegerField(default=0)
+    deleted = models.BooleanField(default=False)
     # Relationships
     company = models.ForeignKey(
         Company, related_name='sales', default='', on_delete=models.CASCADE)
@@ -175,4 +179,14 @@ class InvoiceItem(models.Model):
         Animal, related_name='invoice_items', default='', on_delete=models.CASCADE, null=True
     )
     sale = models.ForeignKey(Sale, related_name='items', default='',
+                             on_delete=models.CASCADE)
+
+
+class Transfer(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    accepted = models.BooleanField(default=False)
+    transferred = models.BooleanField(default=False)
+    created_by = models.EmailField(default='')
+    email = models.EmailField()
+    sale = models.ForeignKey(Sale, related_name='transfers', default='',
                              on_delete=models.CASCADE)
