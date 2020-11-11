@@ -31,11 +31,9 @@ SECRET_KEY = env("DJANGO_SECRET")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = env('ALLOWED_HOSTS').split(',')
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -99,15 +97,15 @@ WSGI_APPLICATION = 'lma.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.1/ref/settings/#databases
 
-if 'DB_NAME' in os.environ:
+if 'RDS_DB_NAME' in os.environ:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': env('DB_NAME'),
-            'USER': env('DB_USER'),
-            'PASSWORD': env('DB_PASSWORD'),
-            'HOST': env('DB_HOST'),
-            'PORT': env('DB_PORT'),
+            'NAME': env('RDS_DB_NAME'),
+            'USER': env('RDS_USERNAME'),
+            'PASSWORD': env('RDS_PASSWORD'),
+            'HOST': env('RDS_HOSTNAME'),
+            'PORT': env('RDS_PORT'),
         }
     }
 else:
