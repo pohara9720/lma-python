@@ -284,11 +284,11 @@ class Util:
         inventory_list = Inventory.objects.all().values()
         sale_list = Sale.objects.all().values()
         animal_headers = ['id', 'name', 'type', 'sub type', 'header image', 'profile image',
-                          'tag #', 'registration #', 'dob', 'breed', 'father', 'mother', 'attachment']
+                          'tag #', 'registration #', 'dob', 'breed', 'sire', 'dam', 'sire name', 'dam name', 'attachment', 'deleted', 'company']
         inventory_headers = ['id', 'category', 'cost', 'tank #',
-                             'canister #', 'top id', 'father', 'mother', 'units']
+                             'canister #', 'top id', 'deleted', 'father', 'mother', 'units', 'animal category', 'company']
         sales_headers = ['id', 'number', 'due date', 'issue date', 'title',
-                         'billed to name', 'billed to address', 'email', 'status', 'phone']
+                         'billed to name', 'billed to address', 'email', 'status', 'phone', 'total', 'deleted', 'company']
 
         def row(list):
             values = []

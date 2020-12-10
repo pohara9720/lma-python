@@ -1376,6 +1376,21 @@ class TaskViewset(viewsets.ModelViewSet):
             print(e)
             return HttpResponseServerError(e)
 
+    @action(detail=False, methods=['post'], authentication_classes=[TokenAuthentication])
+    def search(self, request, pk=None):
+        try:
+            user = Util.authenticate(request, False)
+            company_id = user['company']['id']
+            company = Company.objects.get(id=company_id)
+            value = request.data['value']
+            tasks = Task.objects.filter(
+                title__icontains=value, company=company, deleted=False)
+            serializer = self.get_serializer(tasks, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print(e)
+            return HttpResponseServerError(e)
+
     @action(detail=True, methods=['post'], authentication_classes=[TokenAuthentication])
     def delete_single(self, request, pk=None):
         try:
